@@ -91,6 +91,37 @@ h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--fai
 .ev .m{font-size:11.5px;color:var(--faint);margin-top:2px;font-variant-numeric:tabular-nums}
 .ev .when{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:right;flex:none}
 
+/* push */
+.pushbar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 13px;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--dim)}
+.pushbar b{color:var(--tx)}
+.pushbtn{margin-left:auto;flex:none;padding:7px 13px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card2);color:var(--tx);font-size:12.5px;font-weight:650;cursor:pointer}
+.pushbtn:active{opacity:.7}
+.pushbtn.on{background:rgba(34,197,94,.16);color:var(--buy);border-color:rgba(34,197,94,.35)}
+
+/* search */
+#searchbox{margin-top:10px}
+#q{width:100%;background:var(--card);color:var(--tx);border:1px solid var(--line);
+  border-radius:10px;padding:11px 12px;font-size:15px;-webkit-appearance:none}
+#qres{margin-top:6px;max-height:290px;overflow:auto}
+.qr{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);
+  border:1px solid var(--line);border-radius:9px;margin-top:5px;cursor:pointer}
+.qr:active{background:var(--card2)}
+.qr .sy{font-weight:700;font-size:14px;min-width:82px}
+.qr .de{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.qr .ex{font-size:10.5px;color:var(--dim);background:var(--card2);padding:2px 7px;border-radius:5px;flex:none}
+.qmsg{padding:12px;color:var(--faint);font-size:13px;text-align:center}
+.rm{color:var(--faint);font-size:11px;padding:2px 6px;border-radius:4px;flex:none}
+.rm:hover{color:var(--sell)}
+
+/* signal quality */
+.sq{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 13px}
+.sqc{background:var(--card2);border-radius:9px;padding:10px 12px}
+.sqc .k{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+.sqc .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}
+.sqnote{padding:0 13px 13px;font-size:12px;color:var(--faint);line-height:1.6}
+
 /* chart */
 #paneChart{margin-top:10px}
 #chartbox{height:340px;background:var(--bg)}
@@ -149,7 +180,12 @@ tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
   </div>
   <div class="row" id="symRow">
     <select id="sym"></select>
+    <button class="rf" id="find" aria-label="Search symbols">&#128269;</button>
     <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
+  </div>
+  <div id="searchbox" class="hide">
+    <input id="q" type="search" placeholder="Search any symbol — e.g. banknifty, gold, reliance" autocomplete="off">
+    <div id="qres"></div>
   </div>
   <div class="priceline" id="pl"></div>
 </header>
@@ -159,6 +195,7 @@ tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
 <!-- SYMBOL VIEW -->
 <div id="viewSym">
   <div id="held"></div>
+  <div id="push"></div>
 
   <div class="pane" id="paneChart">
     <div class="ptitle">
@@ -186,6 +223,12 @@ tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
 
   <h2 id="hRead" class="hide">Read</h2>
   <div id="read"></div>
+
+  <h2 id="hSq" class="hide">Signal quality</h2>
+  <div class="pane hide" id="paneSq">
+    <div class="sq" id="sq"></div>
+    <div class="sqnote" id="sqnote"></div>
+  </div>
 
   <h2 id="hCal" class="hide">Upcoming events · 7 days</h2>
   <div id="cal"></div>
@@ -258,24 +301,98 @@ function histKey(sym){ return "hist_"+sym; }
 function loadHist(sym){
   try{ return JSON.parse(localStorage.getItem(histKey(sym))) || []; }catch{ return []; }
 }
-function recordHist(sym, r){
+function recordHist(sym, r, p){
   const h = loadHist(sym), now = Date.now();
   const last = h[h.length-1];
   // Append on change, or at most once every 15 min to keep the file small.
   if(!last || last.r !== r || now - last.t > 9e5){
-    h.push({ r, t: now });
-    if(h.length > 300) h.splice(0, h.length-300);
+    h.push({ r, t: now, p });
+    if(h.length > 500) h.splice(0, h.length-500);
     localStorage.setItem(histKey(sym), JSON.stringify(h));
   }
   return h;
+}
+
+/* ---------- signal quality ----------
+   For every rating flip we recorded, look at what price did afterwards and check
+   whether it moved in the direction the new rating implied. This is deliberately
+   unflattering: it's the only thing on the page that can tell you the ratings
+   are not worth much. Sampling is sparse (only when you open the app), so treat
+   small counts as noise. */
+function findFlips(h){
+  const out = [];
+  for(let i=1;i<h.length;i++){
+    if(h[i].r !== h[i-1].r && h[i].p != null){
+      out.push({ from: h[i-1].r, to: h[i].r, t: h[i].t, p: h[i].p, i });
+    }
+  }
+  return out;
+}
+function outcomeAt(h, flip, horizonMs){
+  const target = flip.t + horizonMs;
+  const later = h.find(x => x.t >= target && x.p != null);
+  if(!later) return null;
+  const dir = flip.to.includes("BUY") ? 1 : flip.to.includes("SELL") ? -1 : 0;
+  if(!dir) return null;                       // flips to NEUTRAL imply no direction
+  const chg = (later.p - flip.p) / flip.p;
+  return { chg, with: chg * dir > 0 };
+}
+function renderQuality(sym){
+  const h = loadHist(sym);
+  const flips = findFlips(h);
+  const hSq = document.getElementById("hSq"), pane = document.getElementById("paneSq");
+
+  if(!flips.length){
+    hSq.classList.remove("hide"); pane.classList.remove("hide");
+    document.getElementById("sq").innerHTML =
+      `<div class="sqc"><div class="k">Flips recorded</div><div class="v">0</div></div>
+       <div class="sqc"><div class="k">Readings</div><div class="v">${h.length}</div></div>`;
+    document.getElementById("sqnote").textContent =
+      "No rating changes captured yet. Once the daily rating flips and you open this again a day later, "+
+      "this panel starts showing whether price actually followed the signal.";
+    return;
+  }
+
+  const horizons = [["1 day", 864e5], ["3 days", 3*864e5]];
+  const cells = [`<div class="sqc"><div class="k">Flips recorded</div><div class="v">${flips.length}</div></div>`];
+  const summary = [];
+
+  for(const [label, ms] of horizons){
+    const res = flips.map(f => outcomeAt(h, f, ms)).filter(Boolean);
+    if(!res.length){
+      cells.push(`<div class="sqc"><div class="k">After ${label}</div><div class="v">—</div></div>`);
+      continue;
+    }
+    const hit = res.filter(r => r.with).length;
+    const pct = Math.round(hit / res.length * 100);
+    cells.push(`<div class="sqc"><div class="k">Followed after ${label}</div>
+      <div class="v">${hit}/${res.length}</div></div>`);
+    summary.push(`${hit} of ${res.length} (${pct}%) after ${label}`);
+  }
+
+  hSq.classList.remove("hide"); pane.classList.remove("hide");
+  document.getElementById("sq").innerHTML = cells.join("");
+
+  const total = flips.length;
+  let note = summary.length
+    ? `Price moved in the direction of the new rating ${summary.join(", ")}. `
+    : `Not enough follow-up readings yet to score any flip. `;
+  if(total < 20){
+    note += `${total} flip${total===1?"":"s"} is far too few to conclude anything — coin flips produce `+
+            `streaks that look meaningful at this sample size. Treat this as a counter, not a verdict.`;
+  } else {
+    note += `Sampling only happens when you open the app, so this understates fast reversals. `+
+            `Anything near 50% means the rating carries no directional information.`;
+  }
+  document.getElementById("sqnote").textContent = note;
 }
 function heldSince(h, cur){
   let since = null;
   for(let i=h.length-1;i>=0;i--){ if(h[i].r===cur) since=h[i].t; else break; }
   return since;
 }
-function renderHeld(sym, cur){
-  const h = recordHist(sym, cur);
+function renderHeld(sym, cur, price){
+  const h = recordHist(sym, cur, price);
   const el = document.getElementById("held");
   if(h.length < 2){
     el.innerHTML = `<div class="held">First reading recorded. Open this again later and it'll show how long
@@ -301,7 +418,8 @@ function renderDetail(rows, sym, ex, dp){
     `<span class="ch ${cls}">${ch>0?"▲":ch<0?"▼":"■"} ${nm(ch,2)}%</span>`+
     `<span class="rng">${nm(day.low,dp)} – ${nm(day.high,dp)}</span>`;
 
-  renderHeld(sym, rec(day["Recommend.All"]));
+  renderHeld(sym, rec(day["Recommend.All"]), day.close);
+  renderQuality(sym);
 
   document.getElementById("banner").innerHTML = marketClosed(ex)
     ? `<div class="banner warn"><b>Market closed.</b> Everything below is frozen at the last session's close —
@@ -357,6 +475,101 @@ function renderDetail(rows, sym, ex, dp){
   ].map(([k,v])=>`<div class="box"><div class="k">${k}</div><div class="v">${nm(v,dp)}</div></div>`).join("");
 
   document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
+}
+
+/* ---------- push notifications ---------- */
+// Alerts fire only when the DAILY rating changes, checked every 2 hours server-side.
+// Deliberately not every candle — a 1m rating flips constantly and would be useless noise.
+let PUSH_KEY = null, PUSH_OK = false;
+
+function b64ToU8(b64){
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g,"+").replace(/_/g,"/"));
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+function pushSupported(){
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+async function pushInit(){
+  const el = document.getElementById("push");
+  if(!pushSupported()){
+    el.innerHTML = `<div class="pushbar">Push alerts aren't supported in this browser.
+      On iPhone, add this page to your Home Screen first, then reopen it from there.</div>`;
+    return;
+  }
+  try{
+    const cfg = await (await fetch("/api/subscribe")).json();
+    PUSH_KEY = cfg.publicKey; PUSH_OK = cfg.configured;
+  }catch{ PUSH_OK = false; }
+
+  if(!PUSH_OK){
+    el.innerHTML = `<div class="pushbar">Push alerts not configured on the server yet —
+      see <b>PUSH-SETUP.md</b>.</div>`;
+    return;
+  }
+  await navigator.serviceWorker.register("/sw.js");
+  renderPushBar();
+}
+
+async function currentSub(){
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function renderPushBar(){
+  const el = document.getElementById("push");
+  const sub = await currentSub();
+  const on = Boolean(sub) && localStorage.getItem("tvpush") === "1";
+  el.innerHTML = `<div class="pushbar">
+      ${on ? "Alerting on <b>daily</b> rating changes, checked every 2 hours."
+           : "Get a notification when the <b>daily</b> rating flips."}
+      <button class="pushbtn ${on?"on":""}" id="pushBtn">${on?"On":"Enable"}</button>
+    </div>`;
+  document.getElementById("pushBtn").onclick = () => on ? pushOff() : pushOn();
+}
+
+async function pushOn(){
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== "granted"){
+      document.getElementById("push").innerHTML =
+        `<div class="pushbar">Notifications blocked. Enable them for this site in your browser settings.</div>`;
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64ToU8(PUSH_KEY)
+    });
+    // Subscribe to everything currently in the picker, capped server-side.
+    const symbols = currentSymbols().slice(0, 10).map(([s,e]) => `${s}:${e}`);
+    const r = await fetch("/api/subscribe", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub, symbols })
+    });
+    if(!r.ok) throw new Error((await r.json()).error || "subscribe failed");
+    localStorage.setItem("tvpush","1");
+    renderPushBar();
+  }catch(e){
+    document.getElementById("push").innerHTML =
+      `<div class="pushbar">Couldn't enable alerts — ${String(e.message||e)}</div>`;
+  }
+}
+
+async function pushOff(){
+  try{
+    const sub = await currentSub();
+    if(sub){
+      await fetch("/api/subscribe", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: sub, action: "unsubscribe" })
+      });
+      await sub.unsubscribe();
+    }
+  }catch{}
+  localStorage.setItem("tvpush","0");
+  renderPushBar();
 }
 
 /* ---------- chart (official TradingView embed) ---------- */
@@ -527,7 +740,7 @@ async function loadWatchlist(){
 
     el.querySelectorAll("tr.clik").forEach(tr=>{
       tr.onclick=()=>{
-        const i=SYMBOLS.findIndex(s=>s[0]===tr.dataset.sym);
+        const i=currentSymbols().findIndex(s=>s[0]===tr.dataset.sym);
         if(i>=0){ sel.selectedIndex=i; localStorage.setItem("tvsym",i); show("sym"); load(); }
       };
     });
@@ -551,7 +764,7 @@ function show(v){
 }
 
 async function load(){
-  const [sym,ex,dp] = SYMBOLS[sel.selectedIndex];
+  const [sym,ex,dp] = currentSymbols()[sel.selectedIndex] || SYMBOLS[0];
   document.getElementById("cards").innerHTML='<div class="load">Loading…</div>';
   document.getElementById("banner").innerHTML="";
   try{
@@ -570,11 +783,81 @@ async function load(){
   }
 }
 
+/* ---------- symbol search + custom symbols ---------- */
+function loadCustom(){
+  try{ return JSON.parse(localStorage.getItem("tvcustom")) || []; }catch{ return []; }
+}
+function saveCustom(list){ localStorage.setItem("tvcustom", JSON.stringify(list)); }
+
+function rebuildSelect(keepSym){
+  const all = SYMBOLS.concat(loadCustom());
+  sel.innerHTML = all.map(([s,e])=>`<option>${s} · ${e}</option>`).join("");
+  const i = keepSym ? all.findIndex(x=>x[0]===keepSym) : -1;
+  if(i>=0) sel.selectedIndex = i;
+  return all;
+}
+function currentSymbols(){ return SYMBOLS.concat(loadCustom()); }
+
+let qTimer = null;
+function toggleSearch(){
+  const b=document.getElementById("searchbox");
+  b.classList.toggle("hide");
+  if(!b.classList.contains("hide")){ document.getElementById("q").focus(); renderCustomList(); }
+}
+function renderCustomList(){
+  const cus = loadCustom();
+  if(document.getElementById("q").value.trim()) return;
+  document.getElementById("qres").innerHTML = cus.length
+    ? cus.map(([s,e])=>`<div class="qr" data-rm="${s}">
+        <span class="sy">${s}</span><span class="de">added by you</span>
+        <span class="ex">${e}</span><span class="rm" data-rm="${s}">remove</span></div>`).join("")
+    : `<div class="qmsg">Type at least 2 characters to search TradingView.</div>`;
+  document.getElementById("qres").querySelectorAll("[data-rm]").forEach(el=>{
+    el.onclick=(ev)=>{
+      ev.stopPropagation();
+      saveCustom(loadCustom().filter(x=>x[0]!==el.dataset.rm));
+      rebuildSelect(); renderCustomList();
+    };
+  });
+}
+async function runSearch(){
+  const q=document.getElementById("q").value.trim();
+  const box=document.getElementById("qres");
+  if(q.length<2){ renderCustomList(); return; }
+  box.innerHTML='<div class="qmsg">Searching…</div>';
+  try{
+    const r=await fetch(`/api/scan?mode=search&q=${encodeURIComponent(q)}`);
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+    if(!j.results.length){
+      box.innerHTML='<div class="qmsg">Nothing found on an exchange this app can price.</div>'; return;
+    }
+    box.innerHTML=j.results.map(x=>`<div class="qr" data-s="${x.symbol}" data-e="${x.exchange}">
+        <span class="sy">${x.symbol}</span>
+        <span class="de">${x.description||x.type||""}</span>
+        <span class="ex">${x.exchange}</span></div>`).join("");
+    box.querySelectorAll(".qr").forEach(el=>{
+      el.onclick=()=>{
+        const s=el.dataset.s, e=el.dataset.e;
+        const cus=loadCustom();
+        if(!SYMBOLS.some(x=>x[0]===s) && !cus.some(x=>x[0]===s)){
+          cus.push([s,e,e==="FX_IDC"?5:2]); saveCustom(cus);
+        }
+        rebuildSelect(s);
+        localStorage.setItem("tvsym", sel.selectedIndex);
+        document.getElementById("q").value=""; toggleSearch(); load();
+      };
+    });
+  }catch(e){ box.innerHTML=`<div class="qmsg">Search failed — ${String(e.message||e)}</div>`; }
+}
+
 const sel=document.getElementById("sym");
-sel.innerHTML = SYMBOLS.map(([s,e])=>`<option>${s} · ${e}</option>`).join("");
+rebuildSelect();
 const saved=localStorage.getItem("tvsym");
-if(saved!==null && SYMBOLS[saved]) sel.selectedIndex=+saved;
+if(saved!==null && currentSymbols()[saved]) sel.selectedIndex=+saved;
 sel.onchange=()=>{ localStorage.setItem("tvsym",sel.selectedIndex); load(); };
+document.getElementById("find").onclick=toggleSearch;
+document.getElementById("q").oninput=()=>{ clearTimeout(qTimer); qTimer=setTimeout(runSearch,320); };
 document.getElementById("rf").onclick=()=>
   localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
 document.getElementById("tabSym").onclick=()=>{ show("sym"); load(); };
@@ -582,6 +865,7 @@ document.getElementById("tabWl").onclick =()=>{ show("wl"); loadWatchlist(); };
 
 if(localStorage.getItem("tvview")==="wl"){ show("wl"); loadWatchlist(); }
 else { show("sym"); load(); }
+pushInit();
 </script>
 </body>
 </html>

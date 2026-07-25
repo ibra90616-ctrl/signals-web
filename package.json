@@ -1,7 +1,10 @@
 {
   "name": "signals-web",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "TradingView technical signal monitor with a serverless CORS proxy"
+  "description": "TradingView technical signal monitor with a serverless proxy and push alerts",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
 }

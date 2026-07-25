@@ -181,6 +181,38 @@ async function handleCalendar(res, symbol) {
   }
 }
 
+async function handleSearch(res, query, type) {
+  const url = "https://symbol-search.tradingview.com/symbol_search/v3/?" + new URLSearchParams({
+    text: query, hl: "1", lang: "en", search_type: type || "", domain: "production"
+  });
+  const r = await fetch(url, {
+    headers: {
+      Origin: "https://www.tradingview.com",
+      Referer: "https://www.tradingview.com/",
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+  if (!r.ok) throw new Error(`Symbol search returned HTTP ${r.status}`);
+  const j = await r.json();
+  const items = j.symbols || (Array.isArray(j) ? j : []);
+  const strip = s => String(s || "").replace(/<\/?em>/g, "");
+
+  // Only return symbols on exchanges the scanner can actually price.
+  const out = [];
+  for (const s of items) {
+    const ex = strip(s.exchange || s.prefix).toUpperCase();
+    if (!SCREENERS[ex]) continue;
+    out.push({
+      symbol: strip(s.symbol),
+      exchange: ex,
+      type: s.type || "",
+      description: strip(s.description)
+    });
+    if (out.length >= 20) break;
+  }
+  res.status(200).json({ results: out });
+}
+
 async function handleBasket(res, symbol, exchange) {
   const screener = SCREENERS[exchange] || "america";
   const list = BASKETS[symbol] || BASKET_DEFAULTS[screener] || BASKET_DEFAULTS.america;
@@ -224,6 +256,11 @@ export default async function handler(req, res) {
     if (mode === "watchlist") return await handleWatchlist(res);
     if (mode === "calendar")  return await handleCalendar(res, symbol);
     if (mode === "basket")    return await handleBasket(res, symbol, exchange);
+    if (mode === "search") {
+      const q = String(req.query.q || "").trim();
+      if (q.length < 2) return res.status(400).json({ error: "Query too short" });
+      return await handleSearch(res, q, String(req.query.type || ""));
+    }
 
     if (!/^[A-Z0-9._-]{1,20}$/.test(symbol) || !SCREENERS[exchange]) {
       return res.status(400).json({ error: "Invalid symbol or exchange" });
