@@ -348,8 +348,11 @@ tr.clik:hover{background:var(--card2)}
   .side::-webkit-scrollbar-thumb,.rail::-webkit-scrollbar-thumb{background:var(--line2)}
   .side::-webkit-scrollbar-track,.rail::-webkit-scrollbar-track{background:transparent}
 
-  /* the tab bar only drives mobile; on desktop both panes are always up */
-  .tabs{display:none}
+  /* Symbol and Watchlist are redundant on desktop (both panes are up), so the
+     bar shrinks to a right-aligned control that really only exists for Board. */
+  .tabs{margin-bottom:0;margin-left:auto;width:auto;flex:none;align-self:stretch}
+  .tab{padding:8px 15px}
+  #tabWl{display:none}
   .deskonly{display:block;margin-top:0}
   #viewSym{display:block!important}
   #rail{display:block!important}
