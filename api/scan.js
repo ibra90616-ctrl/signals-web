@@ -181,6 +181,33 @@ async function handleCalendar(res, symbol) {
   }
 }
 
+// Quotes for an arbitrary ticker list — used to paint the tab strip.
+async function handleQuotes(res, tickersRaw) {
+  const list = String(tickersRaw || "")
+    .split(",").map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 40)
+    .map(t => t.split(":"))
+    .filter(([ex, sym]) => ex && sym && SCREENERS[ex] && /^[A-Z0-9._-]{1,20}$/.test(sym));
+
+  if (!list.length) return res.status(400).json({ error: "No valid tickers" });
+
+  const groups = {};
+  for (const [ex, sym] of list) (groups[SCREENERS[ex]] ||= []).push(`${ex}:${sym}`);
+
+  const cols = ["Recommend.All", "close", "change"];
+  const settled = await Promise.allSettled(
+    Object.entries(groups).map(async ([scr, tickers]) => {
+      const json = await scan(scr, tickers, cols);
+      return (json.data || []).map(e => {
+        const [ex, sym] = e.s.split(":");
+        return { symbol: sym, exchange: ex, score: e.d[0], close: e.d[1], change: e.d[2] };
+      });
+    })
+  );
+
+  const rows = settled.filter(s => s.status === "fulfilled").flatMap(s => s.value);
+  res.status(200).json({ rows, fetched: new Date().toISOString() });
+}
+
 async function handleSearch(res, query, type) {
   const url = "https://symbol-search.tradingview.com/symbol_search/v3/?" + new URLSearchParams({
     text: query, hl: "1", lang: "en", search_type: type || "", domain: "production"
@@ -256,6 +283,7 @@ export default async function handler(req, res) {
     if (mode === "watchlist") return await handleWatchlist(res);
     if (mode === "calendar")  return await handleCalendar(res, symbol);
     if (mode === "basket")    return await handleBasket(res, symbol, exchange);
+    if (mode === "quotes")    return await handleQuotes(res, req.query.tickers);
     if (mode === "search") {
       const q = String(req.query.q || "").trim();
       if (q.length < 2) return res.status(400).json({ error: "Query too short" });

@@ -88,6 +88,44 @@ button.rf:hover{color:var(--tx);background:var(--card2)}
 .pushbtn:hover{color:var(--tx);border-color:var(--faint)}
 .pushbtn.on{color:var(--buy);border-color:color-mix(in srgb,var(--buy) 45%,transparent)}
 
+/* ── symbol tabs + groups ───────────────────────────────────────────── */
+.tabstrip{display:flex;align-items:stretch;gap:0;margin-bottom:10px;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  border-bottom:1px solid var(--line);padding-bottom:0}
+.tabstrip::-webkit-scrollbar{display:none}
+.grp{display:flex;align-items:stretch;flex:none;margin-right:10px;
+  border-bottom:2px solid var(--gc,var(--line2))}
+.grphead{display:flex;align-items:center;gap:6px;padding:6px 9px;cursor:pointer;
+  font:600 9.5px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--gc,var(--dim));white-space:nowrap;user-select:none}
+.grphead:hover{background:var(--card2)}
+.grphead .dot{width:6px;height:6px;background:var(--gc,var(--dim));flex:none}
+.stab{display:flex;align-items:center;gap:7px;padding:6px 9px;cursor:pointer;
+  border-left:1px solid var(--line);white-space:nowrap;flex:none;
+  font:600 11.5px/1 var(--mono);letter-spacing:.02em;color:var(--dim);
+  transition:color .12s,background .12s;user-select:none}
+.stab:hover{background:var(--card2);color:var(--tx)}
+.stab.act{background:var(--card2);color:var(--tx)}
+.stab .sig{width:5px;height:5px;flex:none;background:var(--neu)}
+.stab .sig.up{background:var(--buy)} .stab .sig.down{background:var(--sell)}
+.stab .chg{font-size:9.5px;color:var(--faint);letter-spacing:0}
+.stab .x{color:var(--faint);font-size:12px;line-height:1;padding:0 1px}
+.stab .x:hover{color:var(--sell)}
+.tabadd{flex:none;padding:6px 11px;cursor:pointer;color:var(--faint);
+  font:600 13px/1 var(--sans);background:transparent;border:none}
+.tabadd:hover{color:var(--tx);background:var(--card2)}
+
+.menu{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line2);
+  min-width:172px;padding:3px 0;box-shadow:0 6px 22px rgba(0,0,0,.4)}
+.menu div{padding:7px 12px;font-size:12.5px;color:var(--dim);cursor:pointer;white-space:nowrap}
+.menu div:hover{background:var(--card2);color:var(--tx)}
+.menu .sep{border-top:1px solid var(--line);margin:3px 0;padding:0;cursor:default}
+.menu .sep:hover{background:none}
+.menu .hd{font:600 9px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);padding:8px 12px 5px;cursor:default}
+.menu .hd:hover{background:none;color:var(--faint)}
+.menu .gdot{display:inline-block;width:6px;height:6px;margin-right:7px;vertical-align:1px}
+
 /* ── search ─────────────────────────────────────────────────────────── */
 #searchbox{margin-top:9px}
 #q{width:100%;background:var(--card);color:var(--tx);border:1px solid var(--line);
@@ -309,6 +347,7 @@ tr.clik:hover{background:var(--card2)}
 <div class="wrap">
 
 <header>
+  <div class="tabstrip" id="tabstrip"></div>
   <div class="hbar">
     <div class="tabs">
       <div class="tab on" id="tabSym">Symbol</div>
@@ -885,8 +924,9 @@ async function loadWatchlist(){
 
     el.querySelectorAll("tr.clik").forEach(tr=>{
       tr.onclick=()=>{
-        const i=currentSymbols().findIndex(s=>s[0]===tr.dataset.sym);
-        if(i>=0){ sel.selectedIndex=i; localStorage.setItem("tvsym",i); show("sym"); load(); }
+        const row=j.rows.find(x=>x.symbol===tr.dataset.sym);
+        show("sym");
+        if(row) tabAdd(row.symbol, row.exchange);
       };
     });
     document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
@@ -938,6 +978,187 @@ async function load(){
     document.getElementById("banner").innerHTML =
       `<div class="banner err"><b>Couldn't load data.</b> ${String(e.message||e)}</div>`;
   }
+}
+
+/* ---------- symbol tabs + groups ----------
+   Each tab is a symbol you're monitoring; tabs can be filed into coloured
+   groups. State persists in localStorage. Activating a tab just drives the
+   existing symbol <select>, so every other code path is unchanged. */
+const TABS_KEY = "tvtabs_v2";
+const GCOLORS = ["#4f8ef7","#1fbf6b","#d9a441","#c56bd6","#e5484d","#2bb3c0","#8b929e"];
+let TQ = {};   // symbol -> {score, close, change}
+
+function seedTabs(){
+  const g1 = "g"+Date.now().toString(36), g2 = g1+"b";
+  return {
+    groups:[{id:g1,name:"FX",color:GCOLORS[0],open:true},
+            {id:g2,name:"Crypto",color:GCOLORS[1],open:true}],
+    tabs:[{id:"t1",symbol:"EURUSD",exchange:"FX_IDC",group:g1},
+          {id:"t2",symbol:"XAUUSD",exchange:"FX_IDC",group:g1},
+          {id:"t3",symbol:"BTCUSDT",exchange:"BINANCE",group:g2}],
+    active:"t1"
+  };
+}
+function loadTabState(){
+  try{
+    const t = JSON.parse(localStorage.getItem(TABS_KEY));
+    if(t && Array.isArray(t.tabs) && t.tabs.length) return t;
+  }catch{}
+  const s = seedTabs(); localStorage.setItem(TABS_KEY, JSON.stringify(s)); return s;
+}
+let TS = loadTabState();
+const saveTabs = () => localStorage.setItem(TABS_KEY, JSON.stringify(TS));
+const activeTab = () => TS.tabs.find(t=>t.id===TS.active) || TS.tabs[0];
+
+function tabsRender(){
+  const strip = document.getElementById("tabstrip");
+  const ungrouped = TS.tabs.filter(t=>!t.group || !TS.groups.some(g=>g.id===t.group));
+  let html = "";
+
+  const tabHtml = t => {
+    const q = TQ[t.symbol];
+    const dir = q ? (q.change>0?"up":q.change<0?"down":"") : "";
+    const chg = q && q.change!=null ? `<span class="chg">${q.change>0?"+":""}${q.change.toFixed(2)}%</span>` : "";
+    return `<div class="stab ${t.id===TS.active?"act":""}" data-t="${t.id}">
+        <span class="sig ${dir}"></span>${t.symbol}${chg}
+        <span class="x" data-close="${t.id}">×</span></div>`;
+  };
+
+  for(const g of TS.groups){
+    const mine = TS.tabs.filter(t=>t.group===g.id);
+    if(!mine.length) continue;
+    html += `<div class="grp" style="--gc:${g.color}">
+      <div class="grphead" data-g="${g.id}"><span class="dot"></span>${g.name}
+        <span style="opacity:.55">${g.open===false?"▸":"▾"}</span></div>
+      ${g.open===false ? "" : mine.map(tabHtml).join("")}
+    </div>`;
+  }
+  if(ungrouped.length) html += `<div class="grp" style="--gc:var(--line2)">${ungrouped.map(tabHtml).join("")}</div>`;
+  html += `<button class="tabadd" id="tabadd" title="Add a symbol tab">+</button>`;
+  strip.innerHTML = html;
+
+  strip.querySelectorAll(".stab").forEach(el=>{
+    el.onclick = e=>{
+      if(e.target.dataset.close){ tabClose(e.target.dataset.close); return; }
+      tabActivate(el.dataset.t);
+    };
+    el.oncontextmenu = e=>{ e.preventDefault(); tabMenu(e, el.dataset.t); };
+  });
+  strip.querySelectorAll(".grphead").forEach(el=>{
+    el.onclick = ()=>{
+      const g = TS.groups.find(x=>x.id===el.dataset.g);
+      g.open = g.open===false; saveTabs(); tabsRender();
+    };
+    el.oncontextmenu = e=>{ e.preventDefault(); groupMenu(e, el.dataset.g); };
+  });
+  document.getElementById("tabadd").onclick = ()=>{
+    const b=document.getElementById("searchbox");
+    if(b.classList.contains("hide")) toggleSearch();
+    document.getElementById("q").focus();
+  };
+}
+
+function tabActivate(id){
+  const t = TS.tabs.find(x=>x.id===id); if(!t) return;
+  TS.active = id; saveTabs(); tabsRender();
+  // make sure it's in the picker, then reuse the normal load path
+  const cus = loadCustom();
+  if(!SYMBOLS.some(x=>x[0]===t.symbol) && !cus.some(x=>x[0]===t.symbol)){
+    cus.push([t.symbol, t.exchange, t.exchange==="FX_IDC"?5:2]); saveCustom(cus);
+  }
+  rebuildSelect(t.symbol);
+  localStorage.setItem("tvsym", sel.selectedIndex);
+  load();
+}
+function tabAdd(symbol, exchange){
+  const found = TS.tabs.find(t=>t.symbol===symbol);
+  if(found) return tabActivate(found.id);
+  const cur = activeTab();
+  TS.tabs.push({ id:"t"+Date.now().toString(36), symbol, exchange, group:cur?cur.group:null });
+  TS.active = TS.tabs[TS.tabs.length-1].id;
+  saveTabs(); tabsRender(); tabQuotes();
+  tabActivate(TS.active);
+}
+function tabClose(id){
+  if(TS.tabs.length<=1) return;
+  const i = TS.tabs.findIndex(t=>t.id===id);
+  TS.tabs.splice(i,1);
+  if(TS.active===id) TS.active = TS.tabs[Math.max(0,i-1)].id;
+  saveTabs(); tabsRender(); tabActivate(TS.active);
+}
+
+/* context menus */
+function closeMenus(){ document.querySelectorAll(".menu").forEach(m=>m.remove()); }
+addEventListener("click", closeMenus);
+addEventListener("scroll", closeMenus, true);
+
+function popMenu(ev, items){
+  closeMenus();
+  const m = document.createElement("div");
+  m.className = "menu";
+  m.style.left = Math.min(ev.pageX, innerWidth-190)+"px";
+  m.style.top  = ev.pageY+"px";
+  m.innerHTML = items.map(it =>
+    it.sep ? `<div class="sep"></div>`
+    : it.head ? `<div class="hd">${it.head}</div>`
+    : `<div data-i="${it.i}">${it.dot?`<span class="gdot" style="background:${it.dot}"></span>`:""}${it.label}</div>`
+  ).join("");
+  m.onclick = e=>{
+    e.stopPropagation();
+    const i = e.target.closest("[data-i]")?.dataset.i;
+    if(i!==undefined){ closeMenus(); items[+i].run(); }
+  };
+  document.body.appendChild(m);
+}
+
+function tabMenu(ev, id){
+  const t = TS.tabs.find(x=>x.id===id); if(!t) return;
+  const items = [{head:"Move to group"}];
+  TS.groups.forEach(g=>items.push({
+    i:items.length, label:g.name, dot:g.color,
+    run:()=>{ t.group=g.id; saveTabs(); tabsRender(); }
+  }));
+  items.push({i:items.length,label:"No group",dot:"var(--line2)",
+    run:()=>{ t.group=null; saveTabs(); tabsRender(); }});
+  items.push({sep:true});
+  items.push({i:items.length,label:"New group from this tab…",run:()=>{
+    const name = prompt("Group name"); if(!name) return;
+    const g = {id:"g"+Date.now().toString(36), name:name.slice(0,18),
+               color:GCOLORS[TS.groups.length % GCOLORS.length], open:true};
+    TS.groups.push(g); t.group=g.id; saveTabs(); tabsRender();
+  }});
+  if(TS.tabs.length>1) items.push({i:items.length,label:"Close tab",run:()=>tabClose(id)});
+  popMenu(ev, items.map((it,k)=>it.i!==undefined?{...it,i:k}:it));
+}
+
+function groupMenu(ev, gid){
+  const g = TS.groups.find(x=>x.id===gid); if(!g) return;
+  const items = [
+    {i:0,label:"Rename group…",run:()=>{
+      const n = prompt("Group name", g.name); if(n){ g.name=n.slice(0,18); saveTabs(); tabsRender(); }}},
+    {head:"Colour"}
+  ];
+  GCOLORS.forEach(c=>items.push({i:items.length,label:c===g.color?"Current":"Set colour",dot:c,
+    run:()=>{ g.color=c; saveTabs(); tabsRender(); }}));
+  items.push({sep:true});
+  items.push({i:items.length,label:"Ungroup tabs",run:()=>{
+    TS.tabs.forEach(t=>{ if(t.group===gid) t.group=null; });
+    TS.groups = TS.groups.filter(x=>x.id!==gid); saveTabs(); tabsRender();
+  }});
+  popMenu(ev, items.map((it,k)=>it.i!==undefined?{...it,i:k}:it));
+}
+
+/* live rating dot + change % on each tab */
+async function tabQuotes(){
+  const tickers = TS.tabs.map(t=>`${t.exchange}:${t.symbol}`).join(",");
+  if(!tickers) return;
+  try{
+    const r = await fetch(`/api/scan?mode=quotes&tickers=${encodeURIComponent(tickers)}`);
+    const j = await r.json();
+    if(!r.ok || !j.rows) return;
+    j.rows.forEach(x=>{ TQ[x.symbol] = x; });
+    tabsRender();
+  }catch{}
 }
 
 /* ---------- symbol search + custom symbols ---------- */
@@ -1000,9 +1221,8 @@ async function runSearch(){
         if(!SYMBOLS.some(x=>x[0]===s) && !cus.some(x=>x[0]===s)){
           cus.push([s,e,e==="FX_IDC"?5:2]); saveCustom(cus);
         }
-        rebuildSelect(s);
-        localStorage.setItem("tvsym", sel.selectedIndex);
-        document.getElementById("q").value=""; toggleSearch(); load();
+        document.getElementById("q").value=""; toggleSearch();
+        tabAdd(s, e);   // opens as a tab in the current group
       };
     });
   }catch(e){ box.innerHTML=`<div class="qmsg">Search failed — ${String(e.message||e)}</div>`; }
@@ -1012,10 +1232,15 @@ const sel=document.getElementById("sym");
 rebuildSelect();
 const saved=localStorage.getItem("tvsym");
 if(saved!==null && currentSymbols()[saved]) sel.selectedIndex=+saved;
-sel.onchange=()=>{ localStorage.setItem("tvsym",sel.selectedIndex); load(); };
+sel.onchange=()=>{
+  localStorage.setItem("tvsym",sel.selectedIndex);
+  const [s,e]=currentSymbols()[sel.selectedIndex]||[];
+  if(s) tabAdd(s,e); else load();
+};
 document.getElementById("find").onclick=toggleSearch;
 document.getElementById("q").oninput=()=>{ clearTimeout(qTimer); qTimer=setTimeout(runSearch,320); };
 document.getElementById("rf").onclick=()=>{
+  tabQuotes();
   if(DESK()){ load(); loadWatchlist(); }
   else localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
 };
@@ -1033,6 +1258,19 @@ addEventListener("resize", ()=>{
   if(now) loadWatchlist();
 });
 
+tabsRender();
+{
+  // start on the active tab rather than whatever the picker last held
+  const t = activeTab();
+  if(t){
+    const cus = loadCustom();
+    if(!SYMBOLS.some(x=>x[0]===t.symbol) && !cus.some(x=>x[0]===t.symbol)){
+      cus.push([t.symbol, t.exchange, t.exchange==="FX_IDC"?5:2]); saveCustom(cus);
+    }
+    rebuildSelect(t.symbol);
+    localStorage.setItem("tvsym", sel.selectedIndex);
+  }
+}
 if(DESK()){
   show(localStorage.getItem("tvview") || "sym");
   load(); loadWatchlist();
@@ -1041,6 +1279,7 @@ if(DESK()){
 } else {
   show("sym"); load();
 }
+tabQuotes();
 pushInit();
 </script>
 </body>
