@@ -35,6 +35,8 @@ body{
 }
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px}
 .num,.px,.ch,.rng,.val,.votes,.stat,.when,.m{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hbar{display:flex;flex-direction:column;gap:11px}
+.deskonly{display:none}
 
 /* ── header ─────────────────────────────────────────────────────────── */
 header{position:sticky;top:0;z-index:20;background:var(--bg);
@@ -237,20 +239,86 @@ tr.clik:hover{background:var(--card2)}
   letter-spacing:.08em;margin-top:18px;text-transform:uppercase}
 .hide{display:none!important}
 
+/* ══ workstation — desktop only ═══════════════════════════════════════ */
+@media(min-width:1180px){
+  body{padding-bottom:28px}
+  .wrap{max-width:1760px;padding:0 20px}
+
+  /* header collapses to one row: tabs left, symbol controls right */
+  header{padding:11px 0 10px}
+  .hbar{flex-direction:row;align-items:stretch;gap:14px}
+  .row{flex:1;max-width:540px}
+  .priceline{margin-top:12px;gap:20px}
+  .px{font-size:29px}
+
+  /* three columns, rails hold their own scroll */
+  .ws{display:grid;grid-template-columns:250px minmax(0,1fr) 340px;
+      gap:0 14px;align-items:start;margin-top:12px}
+  .col{min-width:0}
+  .side{position:sticky;top:118px;max-height:calc(100vh - 138px);
+        overflow-y:auto;overflow-x:hidden;display:block!important}
+  .rail{position:sticky;top:118px;max-height:calc(100vh - 138px);overflow-y:auto}
+  .side::-webkit-scrollbar,.rail::-webkit-scrollbar{width:7px}
+  .side::-webkit-scrollbar-thumb,.rail::-webkit-scrollbar-thumb{background:var(--line2)}
+  .side::-webkit-scrollbar-track,.rail::-webkit-scrollbar-track{background:transparent}
+
+  /* the tab bar only drives mobile; on desktop both panes are always up */
+  .tabs{display:none}
+  .deskonly{display:block;margin-top:0}
+  #viewSym{display:block!important}
+  #rail{display:block!important}
+
+  /* sidebar watchlist: symbol · change · daily rating only */
+  .side table{margin-top:0}
+  .side th:nth-child(2),.side td:nth-child(2),
+  .side th:nth-child(4),.side td:nth-child(4),
+  .side th:nth-child(5),.side td:nth-child(5),
+  .side th:nth-child(6),.side td:nth-child(6),
+  .side th:nth-child(8),.side td:nth-child(8){display:none}
+  .side th,.side td{padding:7px 9px}
+  .side td.s{font-size:12.5px}
+  .side .mini{font-size:8.5px;padding:2px 5px}
+  .side .note{display:none}
+
+  /* chart takes the vertical space it deserves */
+  #paneChart{margin-top:0}
+  #chartbox{height:min(52vh,560px)}
+
+  /* eight timeframes in one row, no wrap */
+  #cards{grid-template-columns:repeat(4,1fr);margin-top:14px}
+  @media(min-width:1560px){ #cards{grid-template-columns:repeat(8,1fr)} }
+  .card{padding:10px}
+  .card .sub{display:none}
+  .tf{font-size:13.5px}
+  .badge{font-size:9.5px;padding:3px 7px}
+  .stats{gap:9px;margin-top:9px;padding-top:8px}
+  .stat{font-size:10.5px}
+
+  /* right rail stacks vertically instead of side by side */
+  .gridwrap{grid-template-columns:1fr;gap:12px;margin-top:0}
+  .lv{grid-template-columns:repeat(2,1fr)}
+  .sq{grid-template-columns:1fr}
+  .rail h2{margin:18px 0 8px}
+
+  .disc{max-width:none}
+}
+
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <header>
-  <div class="tabs">
-    <div class="tab on" id="tabSym">Symbol</div>
-    <div class="tab" id="tabWl">Watchlist</div>
-  </div>
-  <div class="row" id="symRow">
-    <select id="sym"></select>
-    <button class="rf" id="find" aria-label="Search symbols">&#128269;</button>
-    <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
+  <div class="hbar">
+    <div class="tabs">
+      <div class="tab on" id="tabSym">Symbol</div>
+      <div class="tab" id="tabWl">Watchlist</div>
+    </div>
+    <div class="row" id="symRow">
+      <select id="sym"></select>
+      <button class="rf" id="find" aria-label="Search symbols">&#128269;</button>
+      <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
+    </div>
   </div>
   <div id="searchbox" class="hide">
     <input id="q" type="search" placeholder="Search any symbol — e.g. banknifty, gold, reliance" autocomplete="off">
@@ -261,54 +329,62 @@ tr.clik:hover{background:var(--card2)}
 
 <div id="banner"></div>
 
-<!-- SYMBOL VIEW -->
-<div id="viewSym">
-  <div id="held"></div>
-  <div id="push"></div>
+<div class="ws">
 
-  <div class="pane" id="paneChart">
-    <div class="ptitle">
-      <span class="n">Chart</span>
-      <span class="tfsel" id="charttf"></span>
-    </div>
-    <div id="chartbox"><iframe id="tvchart" title="TradingView chart" loading="lazy"></iframe></div>
-  </div>
+  <!-- WATCHLIST — left rail on desktop, its own tab on mobile -->
+  <aside id="viewWl" class="col side hide">
+    <h2 class="deskonly">Watchlist</h2>
+    <div id="wl"><div class="load">Loading…</div></div>
+  </aside>
 
-  <div class="gridwrap">
-    <div class="pane" id="paneGrid">
+  <!-- PRIMARY COLUMN -->
+  <main id="viewSym" class="col main">
+    <div id="held"></div>
+    <div id="push"></div>
+
+    <div class="pane" id="paneChart">
       <div class="ptitle">
-        <span class="n">Indicator grid</span>
-        <span class="tfsel" id="tfsel"></span>
+        <span class="n">Chart</span>
+        <span class="tfsel" id="charttf"></span>
       </div>
-      <div id="grid"><div class="load">…</div></div>
+      <div id="chartbox"><iframe id="tvchart" title="TradingView chart" loading="lazy"></iframe></div>
     </div>
-    <div class="pane" id="paneBasket">
-      <div class="ptitle"><span class="n" id="basketName">Related</span></div>
-      <div id="basket"><div class="load">…</div></div>
+
+    <div id="cards"><div class="load">Loading…</div></div>
+
+    <h2 id="hRead" class="hide">Read</h2>
+    <div id="read"></div>
+  </main>
+
+  <!-- RIGHT RAIL -->
+  <aside id="rail" class="col rail">
+    <div class="gridwrap">
+      <div class="pane" id="paneGrid">
+        <div class="ptitle">
+          <span class="n">Indicator grid</span>
+          <span class="tfsel" id="tfsel"></span>
+        </div>
+        <div id="grid"><div class="load">…</div></div>
+      </div>
+      <div class="pane" id="paneBasket">
+        <div class="ptitle"><span class="n" id="basketName">Related</span></div>
+        <div id="basket"><div class="load">…</div></div>
+      </div>
     </div>
-  </div>
 
-  <div id="cards"><div class="load">Loading…</div></div>
+    <h2 id="hLv" class="hide">Key levels · daily</h2>
+    <div class="lv" id="lv"></div>
 
-  <h2 id="hRead" class="hide">Read</h2>
-  <div id="read"></div>
+    <h2 id="hSq" class="hide">Signal quality</h2>
+    <div class="pane hide" id="paneSq">
+      <div class="sq" id="sq"></div>
+      <div class="sqnote" id="sqnote"></div>
+    </div>
 
-  <h2 id="hSq" class="hide">Signal quality</h2>
-  <div class="pane hide" id="paneSq">
-    <div class="sq" id="sq"></div>
-    <div class="sqnote" id="sqnote"></div>
-  </div>
+    <h2 id="hCal" class="hide">Upcoming events · 7 days</h2>
+    <div id="cal"></div>
+  </aside>
 
-  <h2 id="hCal" class="hide">Upcoming events · 7 days</h2>
-  <div id="cal"></div>
-
-  <h2 id="hLv" class="hide">Key levels · daily</h2>
-  <div class="lv" id="lv"></div>
-</div>
-
-<!-- WATCHLIST VIEW -->
-<div id="viewWl" class="hide">
-  <div id="wl"><div class="load">Loading…</div></div>
 </div>
 
 <div class="disc">
@@ -820,16 +896,28 @@ async function loadWatchlist(){
 }
 
 /* ---------- routing ---------- */
+// Below 1180px the two views are mutually exclusive tabs. At workstation width
+// both are on screen at once, so the tab bar is hidden and show() only records
+// intent for when the window shrinks again.
+const DESK = () => window.matchMedia("(min-width:1180px)").matches;
+
 function show(v){
+  localStorage.setItem("tvview", v);
   const isSym = v==="sym";
+  document.getElementById("banner").innerHTML="";
+
+  if(DESK()){
+    ["viewSym","viewWl","rail","symRow","pl"].forEach(id=>
+      document.getElementById(id).classList.remove("hide"));
+    return;
+  }
   document.getElementById("viewSym").classList.toggle("hide", !isSym);
+  document.getElementById("rail").classList.toggle("hide", !isSym);
   document.getElementById("viewWl").classList.toggle("hide", isSym);
   document.getElementById("symRow").classList.toggle("hide", !isSym);
   document.getElementById("pl").classList.toggle("hide", !isSym);
   document.getElementById("tabSym").classList.toggle("on", isSym);
   document.getElementById("tabWl").classList.toggle("on", !isSym);
-  document.getElementById("banner").innerHTML="";
-  localStorage.setItem("tvview", v);
 }
 
 async function load(){
@@ -927,13 +1015,32 @@ if(saved!==null && currentSymbols()[saved]) sel.selectedIndex=+saved;
 sel.onchange=()=>{ localStorage.setItem("tvsym",sel.selectedIndex); load(); };
 document.getElementById("find").onclick=toggleSearch;
 document.getElementById("q").oninput=()=>{ clearTimeout(qTimer); qTimer=setTimeout(runSearch,320); };
-document.getElementById("rf").onclick=()=>
-  localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
+document.getElementById("rf").onclick=()=>{
+  if(DESK()){ load(); loadWatchlist(); }
+  else localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
+};
 document.getElementById("tabSym").onclick=()=>{ show("sym"); load(); };
 document.getElementById("tabWl").onclick =()=>{ show("wl"); loadWatchlist(); };
 
-if(localStorage.getItem("tvview")==="wl"){ show("wl"); loadWatchlist(); }
-else { show("sym"); load(); }
+// Crossing the workstation breakpoint changes which panes exist on screen,
+// so re-apply visibility and fetch whatever wasn't loaded before.
+let wasDesk = DESK();
+addEventListener("resize", ()=>{
+  const now = DESK();
+  if(now === wasDesk) return;
+  wasDesk = now;
+  show(localStorage.getItem("tvview") || "sym");
+  if(now) loadWatchlist();
+});
+
+if(DESK()){
+  show(localStorage.getItem("tvview") || "sym");
+  load(); loadWatchlist();
+} else if(localStorage.getItem("tvview")==="wl"){
+  show("wl"); loadWatchlist();
+} else {
+  show("sym"); load();
+}
 pushInit();
 </script>
 </body>
