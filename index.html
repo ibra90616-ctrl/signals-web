@@ -91,6 +91,12 @@ h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--fai
 .ev .m{font-size:11.5px;color:var(--faint);margin-top:2px;font-variant-numeric:tabular-nums}
 .ev .when{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:right;flex:none}
 
+/* chart */
+#paneChart{margin-top:10px}
+#chartbox{height:340px;background:var(--bg)}
+@media(min-width:760px){ #chartbox{height:440px} }
+#tvchart{width:100%;height:100%;border:0;display:block}
+
 /* indicator grid */
 .gridwrap{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
 @media(min-width:760px){ .gridwrap{grid-template-columns:1fr 1fr} }
@@ -153,6 +159,14 @@ tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
 <!-- SYMBOL VIEW -->
 <div id="viewSym">
   <div id="held"></div>
+
+  <div class="pane" id="paneChart">
+    <div class="ptitle">
+      <span class="n">Chart</span>
+      <span class="tfsel" id="charttf"></span>
+    </div>
+    <div id="chartbox"><iframe id="tvchart" title="TradingView chart" loading="lazy"></iframe></div>
+  </div>
 
   <div class="gridwrap">
     <div class="pane" id="paneGrid">
@@ -345,6 +359,41 @@ function renderDetail(rows, sym, ex, dp){
   document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
 }
 
+/* ---------- chart (official TradingView embed) ---------- */
+// The scanner returns current indicator values only — no candle history — so the
+// chart is TradingView's own free widget rather than something drawn from our data.
+const CHART_TF_KEY = "tvcharttf";
+const TV_INTERVAL = { "1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240","1d":"D","1W":"W" };
+let CHART_SYMBOL = "FX_IDC:EURUSD";
+
+function renderChart(){
+  const tf = localStorage.getItem(CHART_TF_KEY) || "1h";
+  const opts = ["5m","15m","1h","4h","1d"];
+  const bar = document.getElementById("charttf");
+  bar.innerHTML = opts.map(o=>`<span class="tfb ${o===tf?"on":""}" data-tf="${o}">${o}</span>`).join("");
+  bar.querySelectorAll(".tfb").forEach(b=>{
+    b.onclick=()=>{ localStorage.setItem(CHART_TF_KEY, b.dataset.tf); renderChart(); };
+  });
+
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const params = new URLSearchParams({
+    symbol: CHART_SYMBOL,
+    interval: TV_INTERVAL[tf] || "60",
+    theme: dark ? "dark" : "light",
+    style: "1",                       // candles
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC",
+    withdateranges: "0",
+    hide_side_toolbar: "1",
+    hide_top_toolbar: "1",
+    allow_symbol_change: "0",
+    save_image: "0",
+    studies: JSON.stringify(["STD;EMA","STD;EMA"]),
+    locale: "en"
+  });
+  document.getElementById("tvchart").src =
+    "https://s.tradingview.com/widgetembed/?" + params.toString();
+}
+
 /* ---------- indicator grid ---------- */
 // Simple directional tests: is price above or below each level, is the faster
 // line above the slower. These are NOT TradingView's own buy/sell rules, which
@@ -510,6 +559,7 @@ async function load(){
     const j = await r.json();
     if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
     renderDetail(j.rows, sym, ex, dp);
+    CHART_SYMBOL = `${ex}:${sym}`; renderChart();
     GRID_ROWS = j.rows; GRID_DP = dp; renderGrid();
     loadBasket(sym, ex);
     loadCalendar(sym);
