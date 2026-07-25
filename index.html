@@ -279,12 +279,28 @@ tr.clik:hover{background:var(--card2)}
   font:600 10px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;
   transition:color .12s,background .12s}
 .bdbtn:hover{background:var(--card2);color:var(--tx)}
-.bdhint{margin-top:8px;padding:9px 12px;background:var(--panel);
-  border:1px solid var(--line);border-left:2px solid var(--line2);
-  font-size:11.5px;line-height:1.75;color:var(--faint)}
-.bdhint b{color:var(--dim);font-weight:600;text-transform:uppercase;
-  letter-spacing:.09em;font-size:9.5px;margin-right:2px}
-.bdhint code{font:11px var(--mono);color:var(--tx);background:var(--card2);padding:1px 5px}
+/* reference panel */
+.refwrap{margin-top:8px;border:1px solid var(--line);background:var(--panel)}
+.refgrid{display:grid;grid-template-columns:1fr;gap:1px;background:var(--line)}
+@media(min-width:820px){ .refgrid{grid-template-columns:1fr 1fr} }
+@media(min-width:1320px){ .refgrid{grid-template-columns:repeat(3,1fr)} }
+.refsec{background:var(--panel);padding:11px 13px}
+.refsec h4{font:600 9.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 9px}
+.refrow{display:flex;gap:9px;align-items:baseline;padding:3px 0;font-size:11.5px;color:var(--faint)}
+.refrow code{font:11px var(--mono);color:var(--tx);background:var(--card2);
+  padding:1px 5px;flex:none;white-space:nowrap}
+.refrow .d{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font:11px var(--mono);color:var(--dim);background:var(--card2);
+  padding:2px 6px;cursor:pointer;border:1px solid transparent}
+.chip:hover{color:var(--tx);border-color:var(--line2)}
+.recipe{display:block;width:100%;text-align:left;background:var(--card2);
+  border:1px solid var(--line);color:var(--tx);padding:6px 8px;margin-top:5px;
+  font:10.5px/1.45 var(--mono);cursor:pointer;word-break:break-all}
+.recipe:hover{border-color:var(--faint)}
+.recipe span{display:block;font:600 9px/1 var(--sans);letter-spacing:.09em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:4px}
 
 .sheetwrap{margin-top:10px;border:1px solid var(--line);overflow:auto;max-height:calc(100vh - 300px)}
 .sheet{width:100%;border-collapse:collapse;table-layout:fixed;background:var(--panel);
@@ -487,16 +503,9 @@ tr.clik:hover{background:var(--card2)}
     <button class="bdbtn" id="bdChart" title="Turn the selected row into a chart">+ Chart</button>
     <button class="bdbtn" id="bdRows" title="Add 20 rows">+ Rows</button>
     <button class="bdbtn" id="bdWipe" title="Erase the sheet">Clear</button>
+    <button class="bdbtn" id="bdRef" title="Show or hide the formula reference">Reference</button>
   </div>
-  <div class="bdhint">
-    <b>References</b> <code>SYMBOL.TIMEFRAME.FIELD</code> — e.g. <code>=EURUSD.1d.rsi</code>,
-    <code>=BTCUSDT.4h.close</code>, <code>=EURUSD.1h.rating</code>.
-    Fields: close high low change rsi adx stoch wr macd signal psar ema10 ema20 ema50 ema200
-    bbupper bblower pivot r1 s1 score osc ma rating.
-    <b>Cells</b> <code>=A1*2</code>, <code>=(B2-B3)/B3*100</code>.
-    <b>Functions</b> <code>SUM AVG MIN MAX ABS ROUND PCT</code>, ranges like <code>=AVG(B1:B8)</code>.
-    <b>Charts</b> put <code>=CHART(EURUSD,1h)</code> in column A.
-  </div>
+  <div id="ref"></div>
   <div class="sheetwrap"><table class="sheet" id="sheet"></table></div>
 </div>
 
@@ -1205,6 +1214,8 @@ function sheetRender(){
     const ref = inp.dataset.ref;
     inp.onfocus = ()=>{ SEL=ref; document.getElementById("cellref").textContent=ref;
       document.getElementById("fx").value = SH.cells[ref]||"";
+      const rh = document.getElementById("rechd");
+      if(rh) rh.textContent = `Recipes — click to drop into ${ref}, using ${(activeTab()||{}).symbol||"EURUSD"}`;
       inp.value = SH.cells[ref]||""; inp.select(); };
     inp.onblur  = ()=>{ commit(ref, inp.value); };
     inp.onkeydown = e=>{
@@ -1265,7 +1276,130 @@ async function sheetRefreshData(){
   }));
 }
 
+/* ---- reference panel ---- */
+const FIELD_DOC = [
+  ["close","Last price. Also: price, last"],
+  ["high","Session high"],
+  ["low","Session low"],
+  ["change","Percent change on the candle. Also: chg"],
+  ["rsi","Relative Strength Index (14)"],
+  ["adx","Trend strength. Below 20 = weak"],
+  ["stoch","Stochastic %K"],
+  ["wr","Williams %R, −100 to 0"],
+  ["macd","MACD line"],
+  ["signal","MACD signal line"],
+  ["psar","Parabolic SAR"],
+  ["ema10","10-period EMA"],
+  ["ema20","20-period EMA"],
+  ["ema50","50-period EMA"],
+  ["ema200","200-period EMA"],
+  ["bbupper","Upper Bollinger band"],
+  ["bblower","Lower Bollinger band"],
+  ["pivot","Classic pivot, middle"],
+  ["r1","First resistance pivot"],
+  ["s1","First support pivot"],
+  ["score","Overall rating as −1..+1"],
+  ["osc","Oscillator rating as −1..+1"],
+  ["ma","Moving-average rating as −1..+1"],
+  ["rating","Overall rating as text (BUY, SELL…)"]
+];
+const FN_DOC = [
+  ["SUM(a,b,…)","Adds values or a range"],
+  ["AVG(a,b,…)","Mean of values or a range"],
+  ["MIN(a,b,…)","Smallest"],
+  ["MAX(a,b,…)","Largest"],
+  ["ABS(a)","Absolute value"],
+  ["ROUND(a,n)","Round to n decimals"],
+  ["PCT(a,b)","Percent difference of a from b"],
+  ["CHART(sym,tf)","Column A only — makes the row a chart"]
+];
+const RECIPES = [
+  ["Rating as text","=EURUSD.1d.rating"],
+  ["RSI, one decimal","=ROUND(EURUSD.1d.rsi,1)"],
+  ["Distance from 200 EMA, %","=ROUND(PCT(EURUSD.1d.close,EURUSD.1d.ema200),2)"],
+  ["Position in Bollinger band, %","=ROUND((EURUSD.1d.close-EURUSD.1d.bblower)/(EURUSD.1d.bbupper-EURUSD.1d.bblower)*100,1)"],
+  ["Composite across timeframes","=ROUND(AVG(EURUSD.1h.score,EURUSD.4h.score,EURUSD.1d.score,EURUSD.1W.score),3)"],
+  ["Short vs long term spread","=ROUND(EURUSD.1h.score-EURUSD.1W.score,3)"],
+  ["Pips to the 50 EMA","=ROUND((EURUSD.1d.ema50-EURUSD.1d.close)*10000,1)"],
+  ["Where in today's range, %","=ROUND((EURUSD.1d.close-EURUSD.1d.low)/(EURUSD.1d.high-EURUSD.1d.low)*100,1)"],
+  ["Chart row (column A)","=CHART(EURUSD,1h)"]
+];
+
+function refRender(){
+  const open = localStorage.getItem("tvref") !== "0";
+  const box = document.getElementById("ref");
+  if(!open){ box.innerHTML = ""; return; }
+  const sym = (activeTab()||{}).symbol || "EURUSD";
+  const sub = s => s.replace(/EURUSD/g, sym);
+
+  box.innerHTML = `<div class="refwrap"><div class="refgrid">
+
+    <div class="refsec">
+      <h4>Syntax</h4>
+      <div class="refrow"><code>SYMBOL.TF.FIELD</code><span class="d">Live market value</span></div>
+      <div class="refrow"><code>=A1*2</code><span class="d">Reference another cell</span></div>
+      <div class="refrow"><code>=AVG(B1:B8)</code><span class="d">Range inside a function</span></div>
+      <div class="refrow"><code>+ − * / ^ ( )</code><span class="d">Arithmetic</span></div>
+      <div class="refrow"><code>plain text</code><span class="d">Anything not starting with =</span></div>
+      <h4 style="margin-top:13px">Timeframes</h4>
+      <div class="chips">${TF_OK.map(t=>`<span class="chip" data-ins="=${sym}.${t}.rsi">${t}</span>`).join("")}</div>
+      <h4 style="margin-top:13px">Keys</h4>
+      <div class="refrow"><code>Enter</code><span class="d">Commit, move down</span></div>
+      <div class="refrow"><code>Tab</code><span class="d">Commit, move right</span></div>
+      <div class="refrow"><code>Esc</code><span class="d">Revert the cell</span></div>
+    </div>
+
+    <div class="refsec">
+      <h4>Fields — ${FIELD_DOC.length}</h4>
+      ${FIELD_DOC.map(([f,d])=>
+        `<div class="refrow"><code class="chip" data-ins="=${sym}.1d.${f}">${f}</code><span class="d">${d}</span></div>`
+      ).join("")}
+    </div>
+
+    <div class="refsec">
+      <h4>Functions</h4>
+      ${FN_DOC.map(([f,d])=>`<div class="refrow"><code>${f}</code><span class="d">${d}</span></div>`).join("")}
+      <h4 style="margin-top:14px">Errors</h4>
+      <div class="refrow"><code>#NODATA</code><span class="d">Symbol not fetched — hit Recalc</span></div>
+      <div class="refrow"><code>#FIELD</code><span class="d">No such field name</span></div>
+      <div class="refrow"><code>#NOTF</code><span class="d">Timeframe not available</span></div>
+      <div class="refrow"><code>#CYCLE</code><span class="d">Cells reference each other</span></div>
+      <div class="refrow"><code>#SYNTAX</code><span class="d">Formula doesn't parse</span></div>
+      <div class="refrow"><code>#NULL</code><span class="d">Market returned no value</span></div>
+    </div>
+
+    <div class="refsec" style="grid-column:1/-1">
+      <h4 id="rechd">Recipes — click to drop into ${SEL}, using ${sym}</h4>
+      <div style="display:grid;grid-template-columns:1fr;gap:0">
+        ${RECIPES.map(([t,f])=>
+          `<button class="recipe" data-ins="${sub(f).replace(/"/g,"&quot;")}"><span>${t}</span>${sub(f)}</button>`
+        ).join("")}
+      </div>
+    </div>
+
+  </div></div>`;
+
+  box.querySelectorAll("[data-ins]").forEach(el=>{
+    el.onclick = ()=>{
+      const target = /^=CHART\(/i.test(el.dataset.ins) ? "A"+SEL.slice(1) : SEL;
+      SH.cells[target] = el.dataset.ins;
+      saveSheet();
+      if(/^=CHART\(/i.test(el.dataset.ins)){ sheetRender(); return; }
+      sheetRefreshData().then(()=>{
+        repaint();
+        const inp = document.querySelector(`input[data-ref="${target}"]`);
+        if(inp) inp.scrollIntoView({block:"nearest"});
+      });
+      document.getElementById("fx").value = el.dataset.ins;
+    };
+  });
+}
+
 function boardInit(){
+  document.getElementById("bdRef").onclick = ()=>{
+    localStorage.setItem("tvref", localStorage.getItem("tvref")==="0" ? "1" : "0");
+    refRender();
+  };
   const fx = document.getElementById("fx");
   fx.onkeydown = e=>{
     if(e.key==="Enter"){ commit(SEL, fx.value);
@@ -1286,6 +1420,7 @@ function boardInit(){
 
 async function boardOpen(){
   sheetRender();
+  refRender();
   await sheetRefreshData();
   repaint();
 }
