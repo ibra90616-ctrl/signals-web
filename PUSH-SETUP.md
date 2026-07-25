@@ -93,13 +93,30 @@ rating to compare against yet. The second run onward is when it starts working.
 
 ---
 
-## Free tier limits
+## Checking more than once a day
 
-Vercel Hobby allows 2 cron invocations per day on some plans; the schedule here is every
-2 hours (12/day). If Vercel rejects it, open `vercel.json` and change the schedule to
-`"0 8,16 * * *"` for twice daily, or `"0 */6 * * *"` for every 6 hours.
+Vercel's Hobby plan **only allows cron jobs to run once per day** — anything more frequent
+fails at deploy time. `vercel.json` is therefore set to `"0 8 * * *"` (8am daily, ±59 min).
 
-Upstash free tier is 10,000 commands per day. This uses roughly 20 per cron run.
+Once a day is thin for rating changes. Two ways to get more without paying for Pro:
+
+**Option A — external cron (free).** Any scheduler can hit the endpoint; Vercel's limit only
+applies to *its own* cron, not to inbound requests.
+
+1. Sign up at [cron-job.org](https://cron-job.org) (free)
+2. Create a job pointing at `https://signals-web-six.vercel.app/api/cron`
+3. Schedule: every 2 hours
+4. Under **Advanced → Headers**, add:
+   `Authorization: Bearer hj28fnq0zlx4`
+   (that's your `CRON_SECRET` — without it the endpoint returns 401)
+
+You can then delete `vercel.json` entirely, or leave it as a daily backstop.
+
+**Option B — the Claude Desktop task.** `eurusd-rating-change` already runs four times on
+weekdays and has no such limit. It only covers EURUSD and only reports in Claude rather than
+to your phone, but it costs nothing and already works.
+
+Upstash free tier is 10,000 commands per day. This uses roughly 20 per run.
 
 ---
 
