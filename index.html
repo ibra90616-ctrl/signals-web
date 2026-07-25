@@ -91,7 +91,31 @@ h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--fai
 .ev .m{font-size:11.5px;color:var(--faint);margin-top:2px;font-variant-numeric:tabular-nums}
 .ev .when{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:right;flex:none}
 
-/* watchlist */
+/* indicator grid */
+.gridwrap{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+@media(min-width:760px){ .gridwrap{grid-template-columns:1fr 1fr} }
+.pane{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ptitle{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 13px;background:var(--card2);border-bottom:1px solid var(--line)}
+.ptitle .n{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);font-weight:700}
+.tfsel{display:flex;gap:4px}
+.tfb{padding:3px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);
+  color:var(--faint);font-size:11px;font-weight:650;cursor:pointer}
+.tfb.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.grow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 13px;border-top:1px solid var(--line);font-size:13.5px}
+.grow:first-of-type{border-top:none}
+.grow .lv2{color:var(--dim);font-weight:600}
+.grow .val{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;margin-left:auto;margin-right:10px}
+.tag{padding:3px 9px;border-radius:6px;font-size:11.5px;font-weight:700;white-space:nowrap;min-width:74px;text-align:center}
+.tag.bull{background:rgba(34,197,94,.18);color:var(--buy)}
+.tag.bear{background:rgba(239,68,68,.18);color:var(--sell)}
+.score{display:flex;gap:8px;padding:11px 13px;border-top:1px solid var(--line);background:var(--card2)}
+.score div{flex:1;text-align:center;padding:7px;border-radius:8px;font-size:12.5px;font-weight:700}
+.score .b{background:rgba(34,197,94,.14);color:var(--buy)}
+.score .s{background:rgba(239,68,68,.14);color:var(--sell)}
+
+/* watchlist + basket */
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
   border-radius:12px;overflow:hidden;margin-top:10px}
 th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);
@@ -129,6 +153,21 @@ tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
 <!-- SYMBOL VIEW -->
 <div id="viewSym">
   <div id="held"></div>
+
+  <div class="gridwrap">
+    <div class="pane" id="paneGrid">
+      <div class="ptitle">
+        <span class="n">Indicator grid</span>
+        <span class="tfsel" id="tfsel"></span>
+      </div>
+      <div id="grid"><div class="load">…</div></div>
+    </div>
+    <div class="pane" id="paneBasket">
+      <div class="ptitle"><span class="n" id="basketName">Related</span></div>
+      <div id="basket"><div class="load">…</div></div>
+    </div>
+  </div>
+
   <div id="cards"><div class="load">Loading…</div></div>
 
   <h2 id="hRead" class="hide">Read</h2>
@@ -306,6 +345,90 @@ function renderDetail(rows, sym, ex, dp){
   document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
 }
 
+/* ---------- indicator grid ---------- */
+// Simple directional tests: is price above or below each level, is the faster
+// line above the slower. These are NOT TradingView's own buy/sell rules, which
+// are stricter and return NEUTRAL far more often. Deliberately binary so the
+// score sums cleanly, same convention the Pine-script grids use.
+const GRID_TF_KEY = "tvgridtf";
+let GRID_ROWS = null, GRID_DP = 5;
+
+function gridRows(r){
+  const c = r.close;
+  const t = (label, ok, val) => ({ label, bull: ok, val });
+  const stochOk = (r["Stoch.K"]!=null && r["Stoch.D"]!=null) ? r["Stoch.K"] > r["Stoch.D"] : null;
+  const macdOk  = (r["MACD.macd"]!=null && r["MACD.signal"]!=null) ? r["MACD.macd"] > r["MACD.signal"] : null;
+  return [
+    t("EMA 10",  c > r.EMA10,  r.EMA10),
+    t("EMA 20",  c > r.EMA20,  r.EMA20),
+    t("EMA 50",  c > r.EMA50,  r.EMA50),
+    t("EMA 200", c > r.EMA200, r.EMA200),
+    t("RSI",     r.RSI > 50,   r.RSI),
+    t("Stoch",   stochOk,      r["Stoch.K"]),
+    t("MACD",    macdOk,       r["MACD.macd"]),
+    t("PSAR",    c > r["P.SAR"], r["P.SAR"])
+  ].filter(x => x.bull !== null && x.bull !== undefined);
+}
+
+function renderGrid(){
+  const tf = localStorage.getItem(GRID_TF_KEY) || "1h";
+  const opts = ["15m","1h","4h","1d"];
+  document.getElementById("tfsel").innerHTML =
+    opts.map(o=>`<span class="tfb ${o===tf?"on":""}" data-tf="${o}">${o}</span>`).join("");
+  document.getElementById("tfsel").querySelectorAll(".tfb").forEach(b=>{
+    b.onclick=()=>{ localStorage.setItem(GRID_TF_KEY, b.dataset.tf); renderGrid(); };
+  });
+
+  const row = GRID_ROWS?.find(r=>r.tf===tf);
+  const el = document.getElementById("grid");
+  if(!row){ el.innerHTML='<div class="load">No data for '+tf+'</div>'; return; }
+
+  const rows = gridRows(row);
+  const bull = rows.filter(r=>r.bull).length, n = rows.length;
+  el.innerHTML =
+    rows.map(r=>`<div class="grow">
+        <span class="lv2">${r.label}</span>
+        <span class="val">${nm(r.val, r.label==="RSI"||r.label==="Stoch"?1:(Math.abs(r.val)<1?5:GRID_DP))}</span>
+        <span class="tag ${r.bull?"bull":"bear"}">${r.bull?"Bullish ▲":"Bearish ▼"}</span>
+      </div>`).join("") +
+    `<div class="score">
+       <div class="b">Bull ${bull}/${n}</div>
+       <div class="s">Bear ${n-bull}/${n}</div>
+     </div>`;
+}
+
+/* ---------- related basket ---------- */
+async function loadBasket(sym, ex){
+  const el=document.getElementById("basket");
+  el.innerHTML='<div class="load">…</div>';
+  try{
+    const r = await fetch(`/api/scan?mode=basket&symbol=${sym}&exchange=${ex}`);
+    const j = await r.json();
+    if(!r.ok || !j.rows?.length) throw new Error(j.error || "no data");
+    document.getElementById("basketName").textContent = "Related · " + j.rows[0].exchange;
+    el.innerHTML = `<table style="margin:0;border:none;border-radius:0"><thead><tr>
+        <th>Symbol</th><th>Last</th><th>Chg</th><th>Signal</th><th>vs EMA20</th>
+      </tr></thead><tbody>` + j.rows.map(x=>{
+        const dp = DP[x.symbol] ?? (x.close < 10 ? 4 : 2);
+        const ch = x.change ?? 0, cls = ch>0?"up":ch<0?"down":"fl";
+        const sig = rec(x["Recommend.All"]);
+        const above = x.close!=null && x.EMA20!=null ? x.close > x.EMA20 : null;
+        const ema = above===null ? "—"
+          : `<span class="tag ${above?"bull":"bear"}" style="min-width:0">${above?"Above":"Below"}</span>`;
+        return `<tr>
+          <td class="s">${x.symbol}</td>
+          <td class="num">${nm(x.close,dp)}</td>
+          <td class="num ${cls}">${nm(ch,2)}%</td>
+          <td><span class="mini ${sig}">${lbl(sig)}</span></td>
+          <td>${ema}</td>
+        </tr>`;
+      }).join("") + `</tbody></table>`;
+  }catch(e){
+    document.getElementById("basketName").textContent = "Related";
+    el.innerHTML=`<div class="load">Unavailable — ${String(e.message||e)}</div>`;
+  }
+}
+
 async function loadCalendar(sym){
   const h=document.getElementById("hCal"), c=document.getElementById("cal");
   try{
@@ -387,6 +510,8 @@ async function load(){
     const j = await r.json();
     if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
     renderDetail(j.rows, sym, ex, dp);
+    GRID_ROWS = j.rows; GRID_DP = dp; renderGrid();
+    loadBasket(sym, ex);
     loadCalendar(sym);
   }catch(e){
     document.getElementById("cards").innerHTML="";
