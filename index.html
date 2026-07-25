@@ -12,21 +12,23 @@
 :root{
   --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#272c37;
   --tx:#e8eaed; --dim:#9aa2b1; --faint:#6b7280;
-  --buy:#22c55e; --sell:#ef4444; --neu:#6b7280;
+  --buy:#22c55e; --sell:#ef4444; --neu:#6b7280; --warn:#eab308;
 }
 @media (prefers-color-scheme: light){
   :root{ --bg:#fff; --card:#f7f8fa; --card2:#eef0f4; --line:#e2e5ea;
-         --tx:#14161a; --dim:#5b6472; --faint:#89909d; }
+         --tx:#14161a; --dim:#5b6472; --faint:#89909d; --warn:#b8860b; }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{
-  margin:0;background:var(--bg);color:var(--tx);
+body{margin:0;background:var(--bg);color:var(--tx);
   font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  padding:0 0 44px;padding-top:env(safe-area-inset-top);-webkit-font-smoothing:antialiased;
-}
+  padding:0 0 44px;padding-top:env(safe-area-inset-top);-webkit-font-smoothing:antialiased}
 .wrap{max-width:1120px;margin:0 auto;padding:0 14px}
 
-header{position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0 10px;border-bottom:1px solid var(--line)}
+header{position:sticky;top:0;z-index:10;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tab{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--card);
+  color:var(--dim);font-size:14px;font-weight:650;cursor:pointer;text-align:center}
+.tab.on{background:var(--card2);color:var(--tx);border-color:var(--faint)}
 .row{display:flex;align-items:center;gap:9px}
 select{flex:1;appearance:none;background:var(--card);color:var(--tx);border:1px solid var(--line);
   border-radius:10px;padding:11px 12px;font-size:15px;font-weight:600;cursor:pointer}
@@ -39,14 +41,18 @@ button.rf:active{background:var(--card2)}
 .up{color:var(--buy)} .down{color:var(--sell)} .fl{color:var(--neu)}
 .rng{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
 
+.held{margin-top:10px;padding:10px 13px;border-radius:10px;background:var(--card);
+  border:1px solid var(--line);font-size:13px;color:var(--dim)}
+.held b{color:var(--tx)}
+.held .flip{color:var(--warn);font-weight:650}
+
 .banner{margin:12px 0 2px;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.5}
-.banner.warn{background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);color:#d4a017}
+.banner.warn{background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);color:var(--warn)}
 .banner.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171}
 
 #cards{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
 @media(min-width:640px){ #cards{grid-template-columns:1fr 1fr} }
 @media(min-width:960px){ #cards{grid-template-columns:repeat(4,1fr)} }
-
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
 .chead{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .tf{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.3px}
@@ -71,21 +77,47 @@ button.rf:active{background:var(--card2)}
 
 h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);margin:24px 0 9px;font-weight:700}
 .note{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;
-      margin-top:8px;font-size:13.5px;line-height:1.55}
+  margin-top:8px;font-size:13.5px;line-height:1.55}
 .lv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media(min-width:720px){ .lv{grid-template-columns:repeat(6,1fr)} }
+
+/* calendar */
+.ev{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;margin-top:7px}
+.ev .imp{width:4px;align-self:stretch;border-radius:2px;background:var(--faint);flex:none}
+.ev .imp.hi{background:var(--sell)}
+.ev .body{flex:1;min-width:0}
+.ev .t{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .m{font-size:11.5px;color:var(--faint);margin-top:2px;font-variant-numeric:tabular-nums}
+.ev .when{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:right;flex:none}
+
+/* watchlist */
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;overflow:hidden;margin-top:10px}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);
+  font-weight:700;padding:10px 11px;background:var(--card2);white-space:nowrap}
+td{padding:11px;border-top:1px solid var(--line);font-size:13.5px}
+td.s{font-weight:700;font-size:14.5px}
+.num{font-variant-numeric:tabular-nums}
+tr.clik{cursor:pointer} tr.clik:active{background:var(--card2)}
+
 .disc{margin-top:24px;padding:13px 15px;background:var(--card);border:1px solid var(--line);
-      border-radius:11px;font-size:11.5px;line-height:1.65;color:var(--faint)}
+  border-radius:11px;font-size:11.5px;line-height:1.65;color:var(--faint)}
 .disc b{color:var(--dim)}
 .load{text-align:center;color:var(--faint);padding:36px 0;font-size:14px}
 .stamp{text-align:center;color:var(--faint);font-size:11px;margin-top:16px}
+.hide{display:none!important}
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <header>
-  <div class="row">
+  <div class="tabs">
+    <div class="tab on" id="tabSym">Symbol</div>
+    <div class="tab" id="tabWl">Watchlist</div>
+  </div>
+  <div class="row" id="symRow">
     <select id="sym"></select>
     <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
   </div>
@@ -93,20 +125,33 @@ h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--fai
 </header>
 
 <div id="banner"></div>
-<div id="cards"><div class="load">Loading…</div></div>
 
-<h2 id="hRead" style="display:none">Read</h2>
-<div id="read"></div>
+<!-- SYMBOL VIEW -->
+<div id="viewSym">
+  <div id="held"></div>
+  <div id="cards"><div class="load">Loading…</div></div>
 
-<h2 id="hLv" style="display:none">Key levels · daily</h2>
-<div class="lv" id="lv"></div>
+  <h2 id="hRead" class="hide">Read</h2>
+  <div id="read"></div>
+
+  <h2 id="hCal" class="hide">Upcoming events · 7 days</h2>
+  <div id="cal"></div>
+
+  <h2 id="hLv" class="hide">Key levels · daily</h2>
+  <div class="lv" id="lv"></div>
+</div>
+
+<!-- WATCHLIST VIEW -->
+<div id="viewWl" class="hide">
+  <div id="wl"><div class="load">Loading…</div></div>
+</div>
 
 <div class="disc">
   <b>Not investment advice.</b> These ratings are a mechanical vote across ~26 indicators applied to past price on a
-  single timeframe. They carry no information about monetary policy, economic releases, positioning, or your own risk
-  tolerance and time horizon — and they change every candle. Indicators agreeing is not independent confirmation:
-  they are correlated formulas reading the same price series, so fourteen moving averages "agreeing" is closer to one
-  observation than fourteen. Use this to see market state, not to decide trades.
+  single timeframe. They carry no information about positioning or your own risk tolerance and time horizon — and they
+  change every candle. Indicators agreeing is not independent confirmation: they are correlated formulas reading the
+  same price series, so fourteen moving averages "agreeing" is closer to one observation than fourteen. The calendar
+  is shown precisely because the indicators are blind to it. Use this to see market state, not to decide trades.
 </div>
 <div class="stamp" id="stamp"></div>
 
@@ -121,6 +166,7 @@ const SYMBOLS = [
   ["AAPL","NASDAQ",2],    ["MSFT","NASDAQ",2],   ["NVDA","NASDAQ",2],
   ["TSLA","NASDAQ",2],    ["SPY","AMEX",2]
 ];
+const DP = Object.fromEntries(SYMBOLS.map(([s,,d])=>[s,d]));
 
 function rec(v){
   if(v===null||v===undefined) return "NEUTRAL";
@@ -134,8 +180,8 @@ function rec(v){
 const lbl = s => s.replace("_"," ");
 const nm = (v,d) => (v===null||v===undefined||isNaN(v)) ? "—" : Number(v).toFixed(d);
 
-// The scanner returns a -1..1 rating, not raw vote counts; this reconstructs
-// an approximate split for the visual bar only. Ratings themselves are exact.
+// The scanner returns a -1..1 rating, not raw vote counts; this reconstructs an
+// approximate split for the visual bar only. Ratings themselves are exact.
 function split(v){
   const t=26, x=Math.max(-1,Math.min(1,v||0));
   const s=Math.round(t*Math.max(0,-x)), b=Math.round(t*Math.max(0,x));
@@ -147,14 +193,62 @@ function marketClosed(ex){
   if(ex==="FX_IDC") return day===6 || (day===5&&h>=21) || (day===0&&h<21);
   return day===0||day===6||h<13||h>=20;
 }
+function ago(ms){
+  const m=Math.round(ms/6e4);
+  if(m<60) return m+"m";
+  const h=Math.round(m/60); if(h<48) return h+"h";
+  return Math.round(h/24)+"d";
+}
 
-function render(rows, ex, dp){
+/* ---------- rating history (localStorage) ---------- */
+function histKey(sym){ return "hist_"+sym; }
+function loadHist(sym){
+  try{ return JSON.parse(localStorage.getItem(histKey(sym))) || []; }catch{ return []; }
+}
+function recordHist(sym, r){
+  const h = loadHist(sym), now = Date.now();
+  const last = h[h.length-1];
+  // Append on change, or at most once every 15 min to keep the file small.
+  if(!last || last.r !== r || now - last.t > 9e5){
+    h.push({ r, t: now });
+    if(h.length > 300) h.splice(0, h.length-300);
+    localStorage.setItem(histKey(sym), JSON.stringify(h));
+  }
+  return h;
+}
+function heldSince(h, cur){
+  let since = null;
+  for(let i=h.length-1;i>=0;i--){ if(h[i].r===cur) since=h[i].t; else break; }
+  return since;
+}
+function renderHeld(sym, cur){
+  const h = recordHist(sym, cur);
+  const el = document.getElementById("held");
+  if(h.length < 2){
+    el.innerHTML = `<div class="held">First reading recorded. Open this again later and it'll show how long
+      <b>${lbl(cur)}</b> has held and when it last flipped.</div>`;
+    return;
+  }
+  const since = heldSince(h, cur);
+  const prior = [...h].reverse().find(x => x.r !== cur);
+  const dur = since ? ago(Date.now()-since) : "—";
+  let s = `Daily rating <b>${lbl(cur)}</b>, held <b>${dur}</b>`;
+  if(prior) s += ` — flipped from ${lbl(prior.r)}`;
+  const fresh = since && (Date.now()-since) < 6*36e5;
+  el.innerHTML = `<div class="held">${fresh?'<span class="flip">Recent flip · </span>':""}${s}.
+    <span style="color:var(--faint)">Tracked on this device only, from ${h.length} readings.</span></div>`;
+}
+
+/* ---------- symbol view ---------- */
+function renderDetail(rows, sym, ex, dp){
   const day = rows.find(r=>r.tf==="1d") || rows[0];
   const ch = day.change ?? 0, cls = ch>0?"up":ch<0?"down":"fl";
   document.getElementById("pl").innerHTML =
     `<span class="px">${nm(day.close,dp)}</span>`+
     `<span class="ch ${cls}">${ch>0?"▲":ch<0?"▼":"■"} ${nm(ch,2)}%</span>`+
     `<span class="rng">${nm(day.low,dp)} – ${nm(day.high,dp)}</span>`;
+
+  renderHeld(sym, rec(day["Recommend.All"]));
 
   document.getElementById("banner").innerHTML = marketClosed(ex)
     ? `<div class="banner warn"><b>Market closed.</b> Everything below is frozen at the last session's close —
@@ -199,10 +293,10 @@ function render(rows, ex, dp){
   if(day.close!=null&&day["BB.lower"]!=null&&day.close<=day["BB.lower"]*1.0005) notes.push(`Price is sitting on the daily lower Bollinger band (${nm(day["BB.lower"],dp)}) — resolves as either a bounce or an acceleration.`);
   if(day.close!=null&&day["BB.upper"]!=null&&day.close>=day["BB.upper"]*0.9995) notes.push(`Price is at the daily upper Bollinger band (${nm(day["BB.upper"],dp)}).`);
 
-  document.getElementById("hRead").style.display="block";
+  document.getElementById("hRead").classList.remove("hide");
   document.getElementById("read").innerHTML = notes.map(t=>`<div class="note">${t}</div>`).join("");
 
-  document.getElementById("hLv").style.display="block";
+  document.getElementById("hLv").classList.remove("hide");
   document.getElementById("lv").innerHTML = [
     ["BB up",day["BB.upper"]],["Pivot",day["Pivot.M.Classic.Middle"]],["BB low",day["BB.lower"]],
     ["EMA20",day.EMA20],["EMA50",day.EMA50],["EMA200",day.EMA200],
@@ -212,15 +306,88 @@ function render(rows, ex, dp){
   document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
 }
 
+async function loadCalendar(sym){
+  const h=document.getElementById("hCal"), c=document.getElementById("cal");
+  try{
+    const r = await fetch(`/api/scan?mode=calendar&symbol=${sym}`);
+    const j = await r.json();
+    if(!j.events || !j.events.length){ h.classList.add("hide"); c.innerHTML=""; return; }
+    h.classList.remove("hide");
+    c.innerHTML = j.events.map(e=>{
+      const d=new Date(e.date);
+      const when = d.toLocaleDateString(undefined,{weekday:"short"})+" "+
+                   d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+      const meta=[e.country, e.forecast!=null?`fcst ${e.forecast}`:null,
+                  e.previous!=null?`prev ${e.previous}`:null].filter(Boolean).join(" · ");
+      return `<div class="ev"><div class="imp ${e.importance>=1?"hi":""}"></div>
+        <div class="body"><div class="t">${e.title}</div><div class="m">${meta}</div></div>
+        <div class="when">${when}</div></div>`;
+    }).join("");
+  }catch{ h.classList.add("hide"); c.innerHTML=""; }
+}
+
+/* ---------- watchlist ---------- */
+async function loadWatchlist(){
+  const el=document.getElementById("wl");
+  el.innerHTML='<div class="load">Loading 16 symbols…</div>';
+  try{
+    const r = await fetch("/api/scan?mode=watchlist");
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error||("HTTP "+r.status));
+    if(!j.rows.length) throw new Error("No rows returned");
+    el.innerHTML = `<table><thead><tr>
+        <th>Symbol</th><th>Price</th><th>Chg</th><th>1h</th><th>4h</th><th>1d</th><th>RSI</th>
+      </tr></thead><tbody>` +
+      j.rows.map(x=>{
+        const dp=DP[x.symbol]??2, ch=x.change??0;
+        const cls=ch>0?"up":ch<0?"down":"fl";
+        const cell=tf=>{const v=rec(x.tfs[tf]?.["Recommend.All"]);return `<td><span class="mini ${v}">${lbl(v)}</span></td>`;};
+        return `<tr class="clik" data-sym="${x.symbol}">
+          <td class="s">${x.symbol}</td>
+          <td class="num">${nm(x.close,dp)}</td>
+          <td class="num ${cls}">${nm(ch,2)}%</td>
+          ${cell("1h")}${cell("4h")}${cell("1d")}
+          <td class="num">${nm(x.tfs["1d"]?.RSI,1)}</td>
+        </tr>`;
+      }).join("") + `</tbody></table>
+      <div class="note" style="margin-top:10px">Sorted by daily rating, most bullish first. Tap a row to open it.
+      Ranking reflects indicator readings on past price only — not relative value or prospects.</div>`;
+
+    el.querySelectorAll("tr.clik").forEach(tr=>{
+      tr.onclick=()=>{
+        const i=SYMBOLS.findIndex(s=>s[0]===tr.dataset.sym);
+        if(i>=0){ sel.selectedIndex=i; localStorage.setItem("tvsym",i); show("sym"); load(); }
+      };
+    });
+    document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
+  }catch(e){
+    el.innerHTML=`<div class="banner err"><b>Couldn't load watchlist.</b> ${String(e.message||e)}</div>`;
+  }
+}
+
+/* ---------- routing ---------- */
+function show(v){
+  const isSym = v==="sym";
+  document.getElementById("viewSym").classList.toggle("hide", !isSym);
+  document.getElementById("viewWl").classList.toggle("hide", isSym);
+  document.getElementById("symRow").classList.toggle("hide", !isSym);
+  document.getElementById("pl").classList.toggle("hide", !isSym);
+  document.getElementById("tabSym").classList.toggle("on", isSym);
+  document.getElementById("tabWl").classList.toggle("on", !isSym);
+  document.getElementById("banner").innerHTML="";
+  localStorage.setItem("tvview", v);
+}
+
 async function load(){
-  const [sym,ex,dp] = SYMBOLS[document.getElementById("sym").selectedIndex];
+  const [sym,ex,dp] = SYMBOLS[sel.selectedIndex];
   document.getElementById("cards").innerHTML='<div class="load">Loading…</div>';
   document.getElementById("banner").innerHTML="";
   try{
     const r = await fetch(`/api/scan?symbol=${sym}&exchange=${ex}`);
     const j = await r.json();
     if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
-    render(j.rows, ex, dp);
+    renderDetail(j.rows, sym, ex, dp);
+    loadCalendar(sym);
   }catch(e){
     document.getElementById("cards").innerHTML="";
     document.getElementById("banner").innerHTML =
@@ -233,8 +400,13 @@ sel.innerHTML = SYMBOLS.map(([s,e])=>`<option>${s} · ${e}</option>`).join("");
 const saved=localStorage.getItem("tvsym");
 if(saved!==null && SYMBOLS[saved]) sel.selectedIndex=+saved;
 sel.onchange=()=>{ localStorage.setItem("tvsym",sel.selectedIndex); load(); };
-document.getElementById("rf").onclick=load;
-load();
+document.getElementById("rf").onclick=()=>
+  localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
+document.getElementById("tabSym").onclick=()=>{ show("sym"); load(); };
+document.getElementById("tabWl").onclick =()=>{ show("wl"); loadWatchlist(); };
+
+if(localStorage.getItem("tvview")==="wl"){ show("wl"); loadWatchlist(); }
+else { show("sym"); load(); }
 </script>
 </body>
 </html>

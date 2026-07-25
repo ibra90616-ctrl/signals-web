@@ -1,6 +1,10 @@
-// Serverless proxy for TradingView's public scanner endpoint.
-// The browser can't call TradingView directly (CORS); this runs server-side, where CORS doesn't apply.
-// Deployed at /api/scan on Vercel.
+// Serverless proxy for TradingView's public endpoints.
+// Browsers can't call TradingView directly (CORS); this runs server-side, where that doesn't apply.
+//
+// Modes:
+//   /api/scan?symbol=EURUSD&exchange=FX_IDC   -> all timeframes for one symbol
+//   /api/scan?mode=watchlist                  -> 1h/4h/1d ratings for the whole symbol list
+//   /api/scan?mode=calendar&symbol=EURUSD     -> upcoming high-impact economic events
 
 const SCREENERS = {
   FX_IDC: "forex", OANDA: "forex", FXCM: "forex", TVC: "forex",
@@ -20,52 +24,148 @@ const COLS = [
   "MACD.macd", "MACD.signal", "Pivot.M.Classic.Middle", "Pivot.M.Classic.R1", "Pivot.M.Classic.S1"
 ];
 
+// Watchlist: fewer columns, three timeframes.
+const WL_TFS = [["1h", "|60"], ["4h", "|240"], ["1d", ""]];
+const WL_COLS = ["Recommend.All", "close", "change", "RSI", "ADX"];
+
+const WATCHLIST = [
+  ["EURUSD","FX_IDC"],["GBPUSD","FX_IDC"],["USDJPY","FX_IDC"],["AUDUSD","FX_IDC"],
+  ["USDCAD","FX_IDC"],["USDCHF","FX_IDC"],["XAUUSD","FX_IDC"],
+  ["BTCUSDT","BINANCE"],["ETHUSDT","BINANCE"],["SOLUSDT","BINANCE"],["XRPUSDT","BINANCE"],
+  ["AAPL","NASDAQ"],["MSFT","NASDAQ"],["NVDA","NASDAQ"],["TSLA","NASDAQ"],["SPY","AMEX"]
+];
+
+// Which economies drive which symbol, for the calendar.
+const CURRENCY_COUNTRY = {
+  USD: "US", EUR: "EU", GBP: "GB", JPY: "JP", AUD: "AU",
+  CAD: "CA", CHF: "CH", NZD: "NZ", XAU: "US", CNY: "CN"
+};
+
+function countriesFor(symbol) {
+  const s = symbol.toUpperCase();
+  const found = new Set();
+  for (const cur of Object.keys(CURRENCY_COUNTRY)) {
+    if (s.includes(cur)) found.add(CURRENCY_COUNTRY[cur]);
+  }
+  // Crypto and equities are dollar-driven; default to US.
+  if (!found.size) found.add("US");
+  return [...found].join(",");
+}
+
+async function scan(screener, tickers, columns) {
+  const r = await fetch(`https://scanner.tradingview.com/${screener}/scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "signals-web/1.1" },
+    body: JSON.stringify({ symbols: { tickers, query: { types: [] } }, columns })
+  });
+  if (!r.ok) throw new Error(`TradingView returned HTTP ${r.status}`);
+  return r.json();
+}
+
+async function handleDetail(res, symbol, exchange) {
+  const columns = [];
+  for (const [, sfx] of TFS) for (const c of COLS) columns.push(c + sfx);
+
+  const json = await scan(SCREENERS[exchange], [`${exchange}:${symbol}`], columns);
+  if (!json.data || !json.data.length) {
+    return res.status(404).json({ error: `No data for ${exchange}:${symbol}` });
+  }
+  const flat = json.data[0].d;
+  const rows = TFS.map(([tf], i) => {
+    const o = { tf };
+    COLS.forEach((c, k) => { o[c] = flat[i * COLS.length + k]; });
+    return o;
+  });
+  res.status(200).json({ symbol, exchange, rows, fetched: new Date().toISOString() });
+}
+
+async function handleWatchlist(res) {
+  const columns = [];
+  for (const [, sfx] of WL_TFS) for (const c of WL_COLS) columns.push(c + sfx);
+
+  // Group by screener — one request per screener, not per symbol.
+  const groups = {};
+  for (const [sym, ex] of WATCHLIST) {
+    const scr = SCREENERS[ex];
+    (groups[scr] ||= []).push(`${ex}:${sym}`);
+  }
+
+  const settled = await Promise.allSettled(
+    Object.entries(groups).map(async ([scr, tickers]) => {
+      const json = await scan(scr, tickers, columns);
+      return (json.data || []).map(entry => {
+        const [ex, sym] = entry.s.split(":");
+        const o = { symbol: sym, exchange: ex, tfs: {} };
+        WL_TFS.forEach(([tf], i) => {
+          const t = {};
+          WL_COLS.forEach((c, k) => { t[c] = entry.d[i * WL_COLS.length + k]; });
+          o.tfs[tf] = t;
+        });
+        o.close = o.tfs["1d"].close;
+        o.change = o.tfs["1d"].change;
+        o.score = o.tfs["1d"]["Recommend.All"];
+        return o;
+      });
+    })
+  );
+
+  const rows = settled.filter(s => s.status === "fulfilled").flatMap(s => s.value);
+  const failed = settled.filter(s => s.status === "rejected").map(s => String(s.reason));
+  rows.sort((a, b) => (b.score ?? -99) - (a.score ?? -99));
+
+  res.status(200).json({ rows, failed, fetched: new Date().toISOString() });
+}
+
+async function handleCalendar(res, symbol) {
+  const now = new Date();
+  const to = new Date(now.getTime() + 7 * 864e5);
+  const url = "https://economic-calendar.tradingview.com/events?" + new URLSearchParams({
+    from: now.toISOString(),
+    to: to.toISOString(),
+    countries: countriesFor(symbol)
+  });
+
+  try {
+    const r = await fetch(url, { headers: { Origin: "https://www.tradingview.com" } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const events = (j.result || [])
+      .filter(e => e.importance >= 0)          // medium and high impact only
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(0, 12)
+      .map(e => ({
+        title: e.title,
+        country: e.country,
+        date: e.date,
+        importance: e.importance,              // 1 = high, 0 = medium
+        actual: e.actual ?? null,
+        forecast: e.forecast ?? null,
+        previous: e.previous ?? null
+      }));
+    res.status(200).json({ events, fetched: new Date().toISOString() });
+  } catch (e) {
+    // Calendar is a nice-to-have; never fail the page over it.
+    res.status(200).json({ events: [], error: String(e.message || e) });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "s-maxage=30, stale-while-revalidate=60");
 
+  const mode = String(req.query.mode || "detail");
   const symbol = String(req.query.symbol || "EURUSD").toUpperCase();
   const exchange = String(req.query.exchange || "FX_IDC").toUpperCase();
 
-  if (!/^[A-Z0-9._-]{1,20}$/.test(symbol) || !SCREENERS[exchange]) {
-    return res.status(400).json({ error: "Invalid symbol or exchange" });
-  }
-
-  const columns = [];
-  for (const [, sfx] of TFS) for (const c of COLS) columns.push(c + sfx);
-
   try {
-    const upstream = await fetch(
-      `https://scanner.tradingview.com/${SCREENERS[exchange]}/scan`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "User-Agent": "signals-web/1.0" },
-        body: JSON.stringify({
-          symbols: { tickers: [`${exchange}:${symbol}`], query: { types: [] } },
-          columns
-        })
-      }
-    );
+    if (mode === "watchlist") return await handleWatchlist(res);
+    if (mode === "calendar")  return await handleCalendar(res, symbol);
 
-    if (!upstream.ok) {
-      return res.status(502).json({ error: `TradingView returned HTTP ${upstream.status}` });
+    if (!/^[A-Z0-9._-]{1,20}$/.test(symbol) || !SCREENERS[exchange]) {
+      return res.status(400).json({ error: "Invalid symbol or exchange" });
     }
-
-    const json = await upstream.json();
-    if (!json.data || !json.data.length) {
-      return res.status(404).json({ error: `No data for ${exchange}:${symbol}` });
-    }
-
-    // Reshape the flat array into one object per timeframe.
-    const flat = json.data[0].d;
-    const rows = TFS.map(([tf], i) => {
-      const o = { tf };
-      COLS.forEach((c, k) => { o[c] = flat[i * COLS.length + k]; });
-      return o;
-    });
-
-    res.status(200).json({ symbol, exchange, rows, fetched: new Date().toISOString() });
+    return await handleDetail(res, symbol, exchange);
   } catch (e) {
-    res.status(500).json({ error: String(e.message || e) });
+    res.status(502).json({ error: String(e.message || e) });
   }
 }
