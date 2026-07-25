@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1115">
+<title>Signals</title>
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Signals&quot;,&quot;short_name&quot;:&quot;Signals&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%230f1115&quot;,&quot;theme_color&quot;:&quot;%230f1115&quot;,&quot;start_url&quot;:&quot;.&quot;}">
+<style>
+:root{
+  --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#272c37;
+  --tx:#e8eaed; --dim:#9aa2b1; --faint:#6b7280;
+  --buy:#22c55e; --sell:#ef4444; --neu:#6b7280;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#fff; --card:#f7f8fa; --card2:#eef0f4; --line:#e2e5ea;
+         --tx:#14161a; --dim:#5b6472; --faint:#89909d; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;background:var(--bg);color:var(--tx);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:0 0 44px;padding-top:env(safe-area-inset-top);-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 14px}
+
+header{position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0 10px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:9px}
+select{flex:1;appearance:none;background:var(--card);color:var(--tx);border:1px solid var(--line);
+  border-radius:10px;padding:11px 12px;font-size:15px;font-weight:600;cursor:pointer}
+button.rf{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:10px;
+  width:46px;height:44px;font-size:18px;flex:none;cursor:pointer}
+button.rf:active{background:var(--card2)}
+.priceline{display:flex;align-items:baseline;gap:13px;margin-top:12px;flex-wrap:wrap}
+.px{font-size:34px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.ch{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
+.up{color:var(--buy)} .down{color:var(--sell)} .fl{color:var(--neu)}
+.rng{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.banner{margin:12px 0 2px;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.5}
+.banner.warn{background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);color:#d4a017}
+.banner.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171}
+
+#cards{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+@media(min-width:640px){ #cards{grid-template-columns:1fr 1fr} }
+@media(min-width:960px){ #cards{grid-template-columns:repeat(4,1fr)} }
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.chead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tf{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.badge{padding:6px 11px;border-radius:8px;font-size:12.5px;font-weight:750;letter-spacing:.25px;white-space:nowrap}
+.mini{padding:3px 8px;border-radius:6px;font-size:11.5px;font-weight:700;display:inline-block}
+.STRONG_BUY{background:var(--buy);color:#04120a}
+.BUY{background:rgba(34,197,94,.18);color:var(--buy)}
+.NEUTRAL{background:rgba(107,114,128,.2);color:var(--dim)}
+.SELL{background:rgba(239,68,68,.18);color:var(--sell)}
+.STRONG_SELL{background:var(--sell);color:#fff}
+.bar{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:12px 0 6px;background:var(--card2)}
+.bar i{display:block}
+.bar .b{background:var(--buy)} .bar .n{background:var(--neu);opacity:.35} .bar .s{background:var(--sell)}
+.votes{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.sub{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.box{background:var(--card2);border-radius:9px;padding:9px 10px}
+.box .k{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.box .v{font-size:14.5px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px}
+.stats{display:flex;gap:15px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);flex-wrap:wrap}
+.stat{font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.stat b{color:var(--tx);font-weight:650}
+
+h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);margin:24px 0 9px;font-weight:700}
+.note{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+      margin-top:8px;font-size:13.5px;line-height:1.55}
+.lv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:720px){ .lv{grid-template-columns:repeat(6,1fr)} }
+.disc{margin-top:24px;padding:13px 15px;background:var(--card);border:1px solid var(--line);
+      border-radius:11px;font-size:11.5px;line-height:1.65;color:var(--faint)}
+.disc b{color:var(--dim)}
+.load{text-align:center;color:var(--faint);padding:36px 0;font-size:14px}
+.stamp{text-align:center;color:var(--faint);font-size:11px;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="row">
+    <select id="sym"></select>
+    <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
+  </div>
+  <div class="priceline" id="pl"></div>
+</header>
+
+<div id="banner"></div>
+<div id="cards"><div class="load">Loading…</div></div>
+
+<h2 id="hRead" style="display:none">Read</h2>
+<div id="read"></div>
+
+<h2 id="hLv" style="display:none">Key levels · daily</h2>
+<div class="lv" id="lv"></div>
+
+<div class="disc">
+  <b>Not investment advice.</b> These ratings are a mechanical vote across ~26 indicators applied to past price on a
+  single timeframe. They carry no information about monetary policy, economic releases, positioning, or your own risk
+  tolerance and time horizon — and they change every candle. Indicators agreeing is not independent confirmation:
+  they are correlated formulas reading the same price series, so fourteen moving averages "agreeing" is closer to one
+  observation than fourteen. Use this to see market state, not to decide trades.
+</div>
+<div class="stamp" id="stamp"></div>
+
+</div>
+
+<script>
+const SYMBOLS = [
+  ["EURUSD","FX_IDC",5],  ["GBPUSD","FX_IDC",5], ["USDJPY","FX_IDC",3],
+  ["AUDUSD","FX_IDC",5],  ["USDCAD","FX_IDC",5], ["USDCHF","FX_IDC",5],
+  ["XAUUSD","FX_IDC",2],
+  ["BTCUSDT","BINANCE",2],["ETHUSDT","BINANCE",2],["SOLUSDT","BINANCE",2],["XRPUSDT","BINANCE",4],
+  ["AAPL","NASDAQ",2],    ["MSFT","NASDAQ",2],   ["NVDA","NASDAQ",2],
+  ["TSLA","NASDAQ",2],    ["SPY","AMEX",2]
+];
+
+function rec(v){
+  if(v===null||v===undefined) return "NEUTRAL";
+  if(v>=-1&&v<-0.5) return "STRONG_SELL";
+  if(v>=-0.5&&v<-0.1) return "SELL";
+  if(v>=-0.1&&v<=0.1) return "NEUTRAL";
+  if(v>0.1&&v<=0.5) return "BUY";
+  if(v>0.5&&v<=1) return "STRONG_BUY";
+  return "NEUTRAL";
+}
+const lbl = s => s.replace("_"," ");
+const nm = (v,d) => (v===null||v===undefined||isNaN(v)) ? "—" : Number(v).toFixed(d);
+
+// The scanner returns a -1..1 rating, not raw vote counts; this reconstructs
+// an approximate split for the visual bar only. Ratings themselves are exact.
+function split(v){
+  const t=26, x=Math.max(-1,Math.min(1,v||0));
+  const s=Math.round(t*Math.max(0,-x)), b=Math.round(t*Math.max(0,x));
+  return [b, s, t-b-s];
+}
+function marketClosed(ex){
+  if(ex==="BINANCE") return false;
+  const d=new Date(), day=d.getUTCDay(), h=d.getUTCHours();
+  if(ex==="FX_IDC") return day===6 || (day===5&&h>=21) || (day===0&&h<21);
+  return day===0||day===6||h<13||h>=20;
+}
+
+function render(rows, ex, dp){
+  const day = rows.find(r=>r.tf==="1d") || rows[0];
+  const ch = day.change ?? 0, cls = ch>0?"up":ch<0?"down":"fl";
+  document.getElementById("pl").innerHTML =
+    `<span class="px">${nm(day.close,dp)}</span>`+
+    `<span class="ch ${cls}">${ch>0?"▲":ch<0?"▼":"■"} ${nm(ch,2)}%</span>`+
+    `<span class="rng">${nm(day.low,dp)} – ${nm(day.high,dp)}</span>`;
+
+  document.getElementById("banner").innerHTML = marketClosed(ex)
+    ? `<div class="banner warn"><b>Market closed.</b> Everything below is frozen at the last session's close —
+       intraday timeframes especially are stale, and price can gap on reopen.</div>` : "";
+
+  document.getElementById("cards").innerHTML = rows.map(r=>{
+    const all=rec(r["Recommend.All"]), osc=rec(r["Recommend.Other"]), ma=rec(r["Recommend.MA"]);
+    const [b,s,n]=split(r["Recommend.All"]), t=b+s+n, w=x=>(x/t*100).toFixed(1)+"%";
+    return `<div class="card">
+      <div class="chead"><span class="tf">${r.tf}</span><span class="badge ${all}">${lbl(all)}</span></div>
+      <div class="bar"><i class="b" style="width:${w(b)}"></i><i class="n" style="width:${w(n)}"></i><i class="s" style="width:${w(s)}"></i></div>
+      <div class="votes"><span>${b} buy</span><span>${n} neu</span><span>${s} sell</span></div>
+      <div class="sub">
+        <div class="box"><div class="k">Oscillators</div><span class="mini ${osc}">${lbl(osc)}</span></div>
+        <div class="box"><div class="k">Moving avgs</div><span class="mini ${ma}">${lbl(ma)}</span></div>
+      </div>
+      <div class="stats">
+        <span class="stat">RSI <b>${nm(r.RSI,1)}</b></span>
+        <span class="stat">ADX <b>${nm(r.ADX,1)}</b></span>
+        <span class="stat">%R <b>${nm(r["W.R"],0)}</b></span>
+      </div>
+    </div>`;
+  }).join("");
+
+  const notes=[];
+  const recs=rows.map(r=>rec(r["Recommend.All"]));
+  const bear=recs.filter(r=>r.includes("SELL")).length, bull=recs.filter(r=>r.includes("BUY")).length;
+  if(bear===recs.length) notes.push(`All ${recs.length} timeframes read bearish. Aligned — but each row is the same price series at a different lookback, closer to one signal repeated than ${recs.length} confirmations.`);
+  else if(bull===recs.length) notes.push(`All ${recs.length} timeframes read bullish. Same caveat: correlated readings, not independent agreement.`);
+  else notes.push(`Split — ${bull} bullish, ${bear} bearish, ${recs.length-bull-bear} neutral. Short and long horizons disagree, usually the more informative state.`);
+
+  rows.forEach(r=>{
+    const o=rec(r["Recommend.Other"]), m=rec(r["Recommend.MA"]);
+    if(o.includes("BUY")&&m.includes("SELL")) notes.push(`<b>${r.tf}</b> — momentum (${lbl(o)}) diverges from trend (${lbl(m)}): momentum turning up beneath a downtrend.`);
+    if(o.includes("SELL")&&m.includes("BUY")) notes.push(`<b>${r.tf}</b> — momentum (${lbl(o)}) diverges from trend (${lbl(m)}): momentum fading beneath an uptrend.`);
+    if(r.RSI!=null&&r.RSI<30) notes.push(`<b>${r.tf}</b> — RSI ${r.RSI.toFixed(1)}, oversold.`);
+    if(r.RSI!=null&&r.RSI>70) notes.push(`<b>${r.tf}</b> — RSI ${r.RSI.toFixed(1)}, overbought.`);
+    if(r["W.R"]!=null&&r["W.R"]<=-99) notes.push(`<b>${r.tf}</b> — Williams %R at ${r["W.R"].toFixed(0)}, pinned to the range floor.`);
+  });
+  const weak=rows.filter(r=>r.ADX!=null&&r.ADX<20&&rec(r["Recommend.All"]).includes("STRONG"));
+  if(weak.length) notes.push(`ADX below 20 on ${weak.map(r=>r.tf).join(", ")} despite a STRONG rating — weak trend, the label overstates the conviction.`);
+  if(day.close!=null&&day["BB.lower"]!=null&&day.close<=day["BB.lower"]*1.0005) notes.push(`Price is sitting on the daily lower Bollinger band (${nm(day["BB.lower"],dp)}) — resolves as either a bounce or an acceleration.`);
+  if(day.close!=null&&day["BB.upper"]!=null&&day.close>=day["BB.upper"]*0.9995) notes.push(`Price is at the daily upper Bollinger band (${nm(day["BB.upper"],dp)}).`);
+
+  document.getElementById("hRead").style.display="block";
+  document.getElementById("read").innerHTML = notes.map(t=>`<div class="note">${t}</div>`).join("");
+
+  document.getElementById("hLv").style.display="block";
+  document.getElementById("lv").innerHTML = [
+    ["BB up",day["BB.upper"]],["Pivot",day["Pivot.M.Classic.Middle"]],["BB low",day["BB.lower"]],
+    ["EMA20",day.EMA20],["EMA50",day.EMA50],["EMA200",day.EMA200],
+    ["R1",day["Pivot.M.Classic.R1"]],["Price",day.close],["S1",day["Pivot.M.Classic.S1"]]
+  ].map(([k,v])=>`<div class="box"><div class="k">${k}</div><div class="v">${nm(v,dp)}</div></div>`).join("");
+
+  document.getElementById("stamp").textContent = "Updated "+new Date().toLocaleTimeString();
+}
+
+async function load(){
+  const [sym,ex,dp] = SYMBOLS[document.getElementById("sym").selectedIndex];
+  document.getElementById("cards").innerHTML='<div class="load">Loading…</div>';
+  document.getElementById("banner").innerHTML="";
+  try{
+    const r = await fetch(`/api/scan?symbol=${sym}&exchange=${ex}`);
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
+    render(j.rows, ex, dp);
+  }catch(e){
+    document.getElementById("cards").innerHTML="";
+    document.getElementById("banner").innerHTML =
+      `<div class="banner err"><b>Couldn't load data.</b> ${String(e.message||e)}</div>`;
+  }
+}
+
+const sel=document.getElementById("sym");
+sel.innerHTML = SYMBOLS.map(([s,e])=>`<option>${s} · ${e}</option>`).join("");
+const saved=localStorage.getItem("tvsym");
+if(saved!==null && SYMBOLS[saved]) sel.selectedIndex=+saved;
+sel.onchange=()=>{ localStorage.setItem("tvsym",sel.selectedIndex); load(); };
+document.getElementById("rf").onclick=load;
+load();
+</script>
+</body>
+</html>

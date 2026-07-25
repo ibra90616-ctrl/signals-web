@@ -1,0 +1,7 @@
+{
+  "name": "signals-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TradingView technical signal monitor with a serverless CORS proxy"
+}
