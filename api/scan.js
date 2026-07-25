@@ -57,7 +57,7 @@ const COLS = [
 ];
 
 // Watchlist: fewer columns, three timeframes.
-const WL_TFS = [["1h", "|60"], ["4h", "|240"], ["1d", ""]];
+const WL_TFS = [["1m", "|1"], ["1h", "|60"], ["4h", "|240"], ["1d", ""]];
 const WL_COLS = ["Recommend.All", "close", "change", "RSI", "ADX"];
 
 const WATCHLIST = [
