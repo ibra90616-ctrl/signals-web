@@ -169,6 +169,34 @@ h2{font:600 10px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;
 @media(min-width:760px){ #chartbox{height:440px} }
 #tvchart{width:100%;height:100%;border:0;display:block}
 
+/* ── context panel ──────────────────────────────────────────────────── */
+#paneCtx{margin-bottom:12px}
+.regbadge{font:600 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;
+  padding:4px 9px;border:1px solid transparent}
+.regbadge.trend{color:var(--buy);border-color:color-mix(in srgb,var(--buy) 42%,transparent)}
+.regbadge.range{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 42%,transparent)}
+.regbadge.trans{color:var(--dim);border-color:var(--line2)}
+.ctxwhy{padding:9px 12px;border-bottom:1px solid var(--line);
+  font:11px var(--mono);color:var(--faint);letter-spacing:.02em}
+.ctxsec{padding:10px 12px;border-bottom:1px solid var(--line)}
+.ctxsec:last-child{border-bottom:none}
+.ctxsec h5{font:600 9px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 7px}
+.ctxli{font-size:12px;line-height:1.55;color:var(--dim);padding-left:13px;
+  position:relative;margin:4px 0}
+.ctxli:before{content:"";position:absolute;left:0;top:7px;width:4px;height:4px;background:var(--faint)}
+.ctxli b{color:var(--tx);font-weight:600}
+.ctxflag{padding:10px 12px;border-bottom:1px solid var(--line);
+  border-left:2px solid var(--warn);background:color-mix(in srgb,var(--warn) 6%,transparent);
+  font-size:12px;line-height:1.55;color:var(--warn)}
+.ctxflag b{font-weight:600}
+.ctxrow{display:flex;align-items:baseline;gap:10px;font-size:12px;margin:5px 0}
+.ctxrow .k2{color:var(--faint);min-width:82px;flex:none;font-size:11px}
+.ctxrow .v2{color:var(--tx);font-family:var(--mono);font-size:11.5px}
+.ctxrow .v2.warnv{color:var(--warn)}
+.ctxrow .v2.badv{color:var(--sell)}
+.ctxrow .v2.okv{color:var(--buy)}
+
 /* ── indicator grid + basket ────────────────────────────────────────── */
 .gridwrap{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
 @media(min-width:760px){ .gridwrap{grid-template-columns:1fr 1fr} }
@@ -465,6 +493,11 @@ tr.clik:hover{background:var(--card2)}
 
   <!-- RIGHT RAIL -->
   <aside id="rail" class="col rail">
+    <div class="pane" id="paneCtx">
+      <div class="ptitle"><span class="n">Context</span><span class="regbadge" id="regbadge"></span></div>
+      <div id="ctx"><div class="load">…</div></div>
+    </div>
+
     <div class="gridwrap">
       <div class="pane" id="paneGrid">
         <div class="ptitle">
@@ -853,7 +886,8 @@ function renderChart(){
   const bar = document.getElementById("charttf");
   bar.innerHTML = opts.map(o=>`<span class="tfb ${o===tf?"on":""}" data-tf="${o}">${o}</span>`).join("");
   bar.querySelectorAll(".tfb").forEach(b=>{
-    b.onclick=()=>{ localStorage.setItem(CHART_TF_KEY, b.dataset.tf); renderChart(); };
+    b.onclick=()=>{ localStorage.setItem(CHART_TF_KEY, b.dataset.tf); renderChart();
+      if(CTX_ARGS) renderContext(...CTX_ARGS); };   // spread cost is per timeframe
   });
 
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -873,6 +907,192 @@ function renderChart(){
   });
   document.getElementById("tvchart").src =
     "https://s.tradingview.com/widgetembed/?" + params.toString();
+}
+
+/* ══════════ CONTEXT — is this screen worth reading right now? ══════════
+   Every other panel reports indicator values. This one decides what those
+   values are worth, because the same RSI means opposite things in a trend
+   versus a range. Nothing here is a trade call — it's a reliability report
+   on the rest of the dashboard. */
+let CAL_EVENTS = [];
+let CTX_ARGS = null;   // last args passed to renderContext, so it can be re-run
+
+function classifyRegime(rows){
+  const pick = tf => rows.find(r=>r.tf===tf);
+  const why = [];
+  let score = 0, n = 0;
+
+  for(const tf of ["4h","1d"]){
+    const r = pick(tf); if(!r) continue;
+    n++;
+    const adx = r.ADX;
+    if(adx!=null){
+      if(adx>=30) score += 2.5; else if(adx>=25) score += 2;
+      else if(adx>=20) score += 0.5; else if(adx>=15) score -= 1; else score -= 2;
+    }
+    const e20=r.EMA20, e50=r.EMA50, e200=r.EMA200, c=r.close;
+    if(e20&&e50&&e200&&c){
+      const stacked = (e20>e50 && e50>e200) || (e20<e50 && e50<e200);
+      score += stacked ? 1 : -1.2;
+      const spread = (Math.max(e20,e50,e200)-Math.min(e20,e50,e200))/c*100;
+      const bbw = (r["BB.upper"]&&r["BB.lower"]) ? (r["BB.upper"]-r["BB.lower"])/c*100 : null;
+      if(bbw){ score += spread > bbw*0.6 ? 0.8 : -0.8; }
+      if(tf==="1d"){
+        why.push(`ADX ${adx.toFixed(1)}`);
+        why.push(stacked ? "EMAs stacked" : "EMAs tangled");
+        if(bbw) why.push(`band width ${bbw.toFixed(2)}%`);
+      }
+    }
+  }
+  if(!n) return {label:"UNKNOWN", cls:"trans", why:[], score:0};
+  const avg = score/n;
+  const label = avg >= 1.6 ? "TRENDING" : avg <= -0.4 ? "RANGING" : "TRANSITIONING";
+  return {label, cls: label==="TRENDING"?"trend":label==="RANGING"?"range":"trans",
+          why, score: avg};
+}
+
+const REGIME_GUIDE = {
+  TRENDING: [
+    "RSI extremes read as <b>continuation</b>, not reversal — oversold in a downtrend is normal, not a bounce signal.",
+    "Moving-average signals are at their <b>most reliable</b> here.",
+    "Fading the bands works poorly; price rides the band in a trend.",
+    "Oscillator divergence is an early warning, and usually early by a lot."
+  ],
+  RANGING: [
+    "RSI and Stochastic extremes tend to <b>revert</b> — this is where mean reversion works.",
+    "Moving-average signals are <b>mostly noise</b>; they whipsaw as price crosses back and forth.",
+    "Band touches are meaningful; breakouts mostly fail and snap back.",
+    "The rating will flip often and carry little information each time."
+  ],
+  TRANSITIONING: [
+    "Neither trend nor range rules apply cleanly — this is the state with the <b>worst signal quality</b>.",
+    "Wait for ADX to resolve above 25 or below 15 before trusting either playbook.",
+    "Breakout attempts here fail and succeed at roughly similar rates."
+  ],
+  UNKNOWN: ["Not enough data to classify the regime."]
+};
+
+// Flag when the rating is being driven by the input the regime says to distrust.
+function reliabilityFlag(rows, regime){
+  const d = rows.find(r=>r.tf==="1d"); if(!d) return null;
+  const all = rec(d["Recommend.All"]), ma = rec(d["Recommend.MA"]), osc = rec(d["Recommend.Other"]);
+  const maStrong = Math.abs(d["Recommend.MA"]??0) > 0.5;
+  const oscWeak  = Math.abs(d["Recommend.Other"]??0) < 0.2;
+
+  if(regime.label==="RANGING" && maStrong && oscWeak && all!=="NEUTRAL")
+    return `The daily <b>${lbl(all)}</b> is coming almost entirely from moving averages `
+         + `(${lbl(ma)}) while momentum sits at ${lbl(osc)}. In a ranging market that's the `
+         + `least reliable input on the screen.`;
+  if(regime.label==="TRENDING" && oscWeak && maStrong)
+    return `Rating driven by moving averages (${lbl(ma)}) with momentum neutral — `
+         + `consistent with a mature trend, but late entries are the ones that get hurt.`;
+  if(regime.label==="TRANSITIONING" && all!=="NEUTRAL")
+    return `A <b>${lbl(all)}</b> reading during a regime transition is the lowest-confidence `
+         + `combination this dashboard produces.`;
+  return null;
+}
+
+function sessionInfo(ex){
+  const h = new Date().getUTCHours() + new Date().getUTCMinutes()/60;
+  if(ex==="BINANCE"){
+    const thin = h>=1 && h<7;
+    return {name: thin ? "Asian hours · thin" : h>=13&&h<21 ? "US hours · active" : "European hours",
+            rel: thin?0.45:h>=13&&h<21?1:0.75, cls: thin?"warnv":"okv"};
+  }
+  if(["NASDAQ","NYSE","AMEX"].includes(ex)){
+    const open = h>=13.5 && h<20;
+    return {name: open ? "Regular session" : "Outside regular hours",
+            rel: open?1:0.15, cls: open?"okv":"badv"};
+  }
+  if(h>=13 && h<16) return {name:"London/NY overlap", rel:1, cls:"okv"};
+  if(h>=8  && h<13) return {name:"London", rel:0.85, cls:"okv"};
+  if(h>=16 && h<21) return {name:"New York", rel:0.6, cls:""};
+  if(h>=21 && h<22) return {name:"NY close · thin", rel:0.2, cls:"badv"};
+  return {name:"Asian session", rel:0.35, cls:"warnv"};
+}
+
+function nextEvent(){
+  const now = Date.now();
+  const up = CAL_EVENTS
+    .map(e=>({...e, ms: new Date(e.date).getTime()-now}))
+    .filter(e=>e.ms > -30*6e4)
+    .sort((a,b)=>a.ms-b.ms);
+  return up[0] || null;
+}
+
+// Rough per-class spread, in price units.
+function spreadOf(sym, ex, px){
+  if(ex==="FX_IDC"||ex==="OANDA"||ex==="TVC"){
+    if(/^XAU/.test(sym)) return 0.25;
+    if(/^XAG/.test(sym)) return 0.02;
+    if(/JPY$/.test(sym)) return 0.012;
+    return 0.00008;
+  }
+  if(ex==="BINANCE") return px*0.0001;
+  return Math.max(0.01, px*0.0002);
+}
+const TF_MIN = {"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240,"1d":1440,"1W":10080};
+
+// Estimate a typical candle range at tf by scaling the daily range by √time.
+function costPicture(sym, ex, rows, tf){
+  const d = rows.find(r=>r.tf==="1d");
+  if(!d || d.high==null || d.low==null || !d.close) return null;
+  const dayRange = d.high - d.low;
+  if(!(dayRange>0)) return null;
+  const est = dayRange / Math.sqrt(1440 / (TF_MIN[tf]||60));
+  const sp = spreadOf(sym, ex, d.close);
+  return {est, sp, pct: sp/est*100, tf};
+}
+
+function renderContext(sym, ex, rows, dp){
+  const regime = classifyRegime(rows);
+  document.getElementById("regbadge").className = "regbadge " + regime.cls;
+  document.getElementById("regbadge").textContent = regime.label;
+
+  const flag = reliabilityFlag(rows, regime);
+  const ses = sessionInfo(ex);
+  const ev = nextEvent();
+  const chartTf = localStorage.getItem(CHART_TF_KEY) || "1h";
+  const cost = costPicture(sym, ex, rows, chartTf);
+
+  let evLine = `<span class="v2">none in the next 7 days</span>`;
+  if(ev){
+    const mins = Math.round(ev.ms/6e4);
+    const when = mins < 0 ? `${-mins}m ago`
+               : mins < 90 ? `in ${mins}m`
+               : mins < 1440 ? `in ${Math.round(mins/60)}h`
+               : `in ${Math.round(mins/1440)}d`;
+    const hot = mins > -30 && mins < 60 && ev.importance >= 1;
+    evLine = `<span class="v2 ${hot?"badv":ev.importance>=1?"warnv":""}">${ev.title} · ${when}</span>`;
+  }
+
+  let costLine = "";
+  if(cost){
+    const cls = cost.pct > 40 ? "badv" : cost.pct > 20 ? "warnv" : "okv";
+    const unit = ex==="FX_IDC" && !/^XA/.test(sym) ? (/JPY$/.test(sym)?100:10000) : 1;
+    const fmt = v => unit>1 ? (v*unit).toFixed(1)+"p" : v.toFixed(dp>2?2:dp);
+    costLine = `<div class="ctxrow"><span class="k2">Spread cost</span>
+      <span class="v2 ${cls}">${fmt(cost.sp)} of a ~${fmt(cost.est)} ${cost.tf} candle
+      = ${cost.pct.toFixed(0)}%</span></div>`;
+  }
+
+  const hotEvent = ev && ev.ms > -30*6e4 && ev.ms < 60*6e4 && ev.importance >= 1;
+
+  document.getElementById("ctx").innerHTML =
+    `<div class="ctxwhy">${regime.why.join(" · ") || "—"}</div>` +
+    (hotEvent ? `<div class="ctxflag"><b>High-impact event inside the hour.</b>
+       Technical readings have little predictive value across a release — price
+       gaps to the number, not to the indicators.</div>` : "") +
+    (flag ? `<div class="ctxflag">${flag}</div>` : "") +
+    `<div class="ctxsec"><h5>What this regime means</h5>
+       ${REGIME_GUIDE[regime.label].map(t=>`<div class="ctxli">${t}</div>`).join("")}
+     </div>
+     <div class="ctxsec">
+       <div class="ctxrow"><span class="k2">Next event</span>${evLine}</div>
+       <div class="ctxrow"><span class="k2">Session</span>
+         <span class="v2 ${ses.cls}">${ses.name} · ~${Math.round(ses.rel*100)}% of peak range</span></div>
+       ${costLine}
+     </div>`;
 }
 
 /* ---------- indicator grid ---------- */
@@ -964,6 +1184,8 @@ async function loadCalendar(sym){
   try{
     const r = await fetch(`/api/scan?mode=calendar&symbol=${sym}`);
     const j = await r.json();
+    CAL_EVENTS = j.events || [];
+    if(CTX_ARGS) renderContext(...CTX_ARGS);      // event proximity needs this data
     if(!j.events || !j.events.length){ h.classList.add("hide"); c.innerHTML=""; return; }
     h.classList.remove("hide");
     c.innerHTML = j.events.map(e=>{
@@ -1593,6 +1815,7 @@ async function load(){
     const j = await r.json();
     if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
     renderDetail(j.rows, sym, ex, dp);
+    CTX_ARGS = [sym, ex, j.rows, dp]; renderContext(...CTX_ARGS);
     CHART_SYMBOL = `${ex}:${sym}`; renderChart();
     GRID_ROWS = j.rows; GRID_DP = dp; renderGrid();
     loadBasket(sym, ex);
