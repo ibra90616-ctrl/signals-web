@@ -57,6 +57,14 @@ button.rf{background:var(--card);color:var(--dim);border:1px solid var(--line);
   transition:color .12s,background .12s}
 button.rf:last-of-type{border-right:1px solid var(--line)}
 button.rf:hover{color:var(--tx);background:var(--card2)}
+button.rf.auto{width:auto;padding:0 11px;display:flex;align-items:center;gap:6px;
+  font:600 9.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase}
+.lamp{width:5px;height:5px;background:var(--faint);flex:none;transition:background .2s}
+button.rf.auto.on{color:var(--buy)}
+button.rf.auto.on .lamp{background:var(--buy);animation:pulse 2.4s ease-in-out infinite}
+button.rf.auto.idle .lamp{background:var(--warn)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){ button.rf.auto.on .lamp{animation:none} }
 
 .priceline{display:flex;align-items:baseline;gap:16px;margin-top:14px;flex-wrap:wrap}
 .px{font-size:33px;font-weight:600;letter-spacing:-.02em;line-height:1}
@@ -452,7 +460,8 @@ tr.clik:hover{background:var(--card2)}
     <div class="row" id="symRow">
       <select id="sym"></select>
       <button class="rf" id="find" aria-label="Search symbols">&#128269;</button>
-      <button class="rf" id="rf" aria-label="Refresh">&#8635;</button>
+      <button class="rf auto" id="auto" title="Auto-refresh every 60s"><span class="lamp"></span>Live</button>
+      <button class="rf" id="rf" aria-label="Refresh now">&#8635;</button>
     </div>
   </div>
   <div id="searchbox" class="hide">
@@ -1806,26 +1815,75 @@ function show(v){
   document.getElementById("tabWl").classList.toggle("on", !isSym);
 }
 
-async function load(){
+// quiet = an auto-refresh tick: no loading placeholder, no chart reload
+// (reloading the iframe every minute would make it blink), no calendar refetch.
+async function load(quiet){
   const [sym,ex,dp] = currentSymbols()[sel.selectedIndex] || SYMBOLS[0];
-  document.getElementById("cards").innerHTML='<div class="load">Loading…</div>';
-  document.getElementById("banner").innerHTML="";
+  if(!quiet){
+    document.getElementById("cards").innerHTML='<div class="load">Loading…</div>';
+    document.getElementById("banner").innerHTML="";
+  }
   try{
     const r = await fetch(`/api/scan?symbol=${sym}&exchange=${ex}`);
     const j = await r.json();
     if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
     renderDetail(j.rows, sym, ex, dp);
     CTX_ARGS = [sym, ex, j.rows, dp]; renderContext(...CTX_ARGS);
-    CHART_SYMBOL = `${ex}:${sym}`; renderChart();
     GRID_ROWS = j.rows; GRID_DP = dp; renderGrid();
+    if(!quiet){
+      CHART_SYMBOL = `${ex}:${sym}`; renderChart();
+      loadCalendar(sym);
+    }
     loadBasket(sym, ex);
-    loadCalendar(sym);
   }catch(e){
+    if(quiet) return;                      // a failed tick shouldn't wipe the screen
     document.getElementById("cards").innerHTML="";
     document.getElementById("banner").innerHTML =
       `<div class="banner err"><b>Couldn't load data.</b> ${String(e.message||e)}</div>`;
   }
 }
+
+/* ---------- auto-refresh ----------
+   Polls while the tab is visible and the market is actually open. Skips the
+   Board (a sheet that rewrites itself under your cursor is hostile) and skips
+   closed markets, where every tick would return identical frozen numbers. */
+const AUTO_MS = 60000;
+let AUTO_T = null;
+
+function autoReasonIdle(){
+  const [,ex] = currentSymbols()[sel.selectedIndex] || [];
+  if(localStorage.getItem("tvview")==="bd") return "paused on Board";
+  if(ex && marketClosed(ex)) return "market closed";
+  if(document.hidden) return "tab hidden";
+  return null;
+}
+function autoPaint(){
+  const b = document.getElementById("auto");
+  const on = localStorage.getItem("tvauto") !== "0";
+  const idle = on ? autoReasonIdle() : null;
+  b.classList.toggle("on", on && !idle);
+  b.classList.toggle("idle", Boolean(on && idle));
+  b.title = !on ? "Auto-refresh off — click to enable"
+          : idle ? `Auto-refresh on, ${idle}` : "Auto-refresh every 60s — click to stop";
+}
+async function autoTick(){
+  if(localStorage.getItem("tvauto")==="0"){ autoPaint(); return; }
+  if(autoReasonIdle()){ autoPaint(); return; }
+  autoPaint();
+  await load(true);
+  tabQuotes();
+  if(DESK()) loadWatchlist();
+}
+function autoSet(on){
+  localStorage.setItem("tvauto", on ? "1" : "0");
+  clearInterval(AUTO_T); AUTO_T = null;
+  if(on) AUTO_T = setInterval(autoTick, AUTO_MS);
+  autoPaint();
+}
+addEventListener("visibilitychange", ()=>{
+  autoPaint();
+  if(!document.hidden && localStorage.getItem("tvauto")!=="0" && !autoReasonIdle()) autoTick();
+});
 
 /* ---------- symbol tabs + groups ----------
    Each tab is a symbol you're monitoring; tabs can be filed into coloured
@@ -2091,9 +2149,10 @@ document.getElementById("rf").onclick=()=>{
   if(DESK()){ load(); loadWatchlist(); }
   else localStorage.getItem("tvview")==="wl" ? loadWatchlist() : load();
 };
-document.getElementById("tabSym").onclick=()=>{ show("sym"); load(); if(DESK()) loadWatchlist(); };
-document.getElementById("tabWl").onclick =()=>{ show("wl"); loadWatchlist(); };
-document.getElementById("tabBd").onclick =()=>{ show("bd"); boardOpen(); };
+document.getElementById("auto").onclick=()=>autoSet(localStorage.getItem("tvauto")==="0");
+document.getElementById("tabSym").onclick=()=>{ show("sym"); load(); if(DESK()) loadWatchlist(); autoPaint(); };
+document.getElementById("tabWl").onclick =()=>{ show("wl"); loadWatchlist(); autoPaint(); };
+document.getElementById("tabBd").onclick =()=>{ show("bd"); boardOpen(); autoPaint(); };
 
 // Crossing the workstation breakpoint changes which panes exist on screen,
 // so re-apply visibility and fetch whatever wasn't loaded before.
@@ -2132,6 +2191,7 @@ if(startView==="bd"){
   show("sym"); load();
 }
 tabQuotes();
+autoSet(localStorage.getItem("tvauto") !== "0");
 pushInit();
 </script>
 </body>
