@@ -460,7 +460,7 @@ tr.clik:hover{background:var(--card2)}
     <div class="row" id="symRow">
       <select id="sym"></select>
       <button class="rf" id="find" aria-label="Search symbols">&#128269;</button>
-      <button class="rf auto" id="auto" title="Auto-refresh every 60s"><span class="lamp"></span>Live</button>
+      <button class="rf auto" id="auto" title="Auto-refresh every 30s"><span class="lamp"></span>Live</button>
       <button class="rf" id="rf" aria-label="Refresh now">&#8635;</button>
     </div>
   </div>
@@ -1847,7 +1847,7 @@ async function load(quiet){
    Polls while the tab is visible and the market is actually open. Skips the
    Board (a sheet that rewrites itself under your cursor is hostile) and skips
    closed markets, where every tick would return identical frozen numbers. */
-const AUTO_MS = 60000;
+const AUTO_MS = 30000;
 let AUTO_T = null;
 
 function autoReasonIdle(){
@@ -1864,7 +1864,7 @@ function autoPaint(){
   b.classList.toggle("on", on && !idle);
   b.classList.toggle("idle", Boolean(on && idle));
   b.title = !on ? "Auto-refresh off — click to enable"
-          : idle ? `Auto-refresh on, ${idle}` : "Auto-refresh every 60s — click to stop";
+          : idle ? `Auto-refresh on, ${idle}` : "Auto-refresh every 30s — click to stop";
 }
 async function autoTick(){
   if(localStorage.getItem("tvauto")==="0"){ autoPaint(); return; }

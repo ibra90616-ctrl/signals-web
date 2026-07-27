@@ -273,7 +273,9 @@ async function handleBasket(res, symbol, exchange) {
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "s-maxage=30, stale-while-revalidate=60");
+  // Kept below the client's 30s poll interval so each tick gets fresh data
+  // rather than a response that's already aged out.
+  res.setHeader("Cache-Control", "s-maxage=12, stale-while-revalidate=30");
 
   const mode = String(req.query.mode || "detail");
   const symbol = String(req.query.symbol || "EURUSD").toUpperCase();
