@@ -53,12 +53,12 @@ const COLS = [
   "Recommend.All", "Recommend.Other", "Recommend.MA", "RSI", "ADX", "close", "change",
   "high", "low", "EMA20", "EMA50", "EMA200", "BB.upper", "BB.lower", "W.R", "Stoch.K",
   "MACD.macd", "MACD.signal", "Pivot.M.Classic.Middle", "Pivot.M.Classic.R1", "Pivot.M.Classic.S1",
-  "EMA10", "Stoch.D", "P.SAR"
+  "EMA10", "Stoch.D", "P.SAR", "volume", "VWMA"
 ];
 
 // Watchlist: fewer columns, three timeframes.
 const WL_TFS = [["1m", "|1"], ["1h", "|60"], ["4h", "|240"], ["1d", ""]];
-const WL_COLS = ["Recommend.All", "close", "change", "RSI", "ADX"];
+const WL_COLS = ["Recommend.All", "close", "change", "RSI", "ADX", "volume"];
 
 const WATCHLIST = [
   ["EURUSD","FX_IDC"],["GBPUSD","FX_IDC"],["USDJPY","FX_IDC"],["AUDUSD","FX_IDC"],
